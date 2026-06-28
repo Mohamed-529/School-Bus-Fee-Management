@@ -1,0 +1,6 @@
+{
+  "name": "School Bus Fee Management System",
+  "description": "Comprehensive production-ready school bus fee management system for Admins and Students with real-time fee tracking, route & stop management, bulk import, receipt generation, and reminder notifications.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
