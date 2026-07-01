@@ -37,7 +37,17 @@ export const AdminDashboardView: React.FC = () => {
     classMap[s.class].collected += s.paidAmount;
     classMap[s.class].pending += s.pendingAmount;
   });
-  const classChartData = Object.values(classMap).sort((a, b) => parseInt(a.cls.replace(/\D/g, '')) - parseInt(b.cls.replace(/\D/g, '')));
+  const classOrder = ['LKG', 'UKG', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
+  const classChartData = Object.values(classMap).sort((a, b) => {
+    const rawA = a.cls.replace('Class ', '').toUpperCase();
+    const rawB = b.cls.replace('Class ', '').toUpperCase();
+    const idxA = classOrder.indexOf(rawA);
+    const idxB = classOrder.indexOf(rawB);
+    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+    if (idxA !== -1) return -1;
+    if (idxB !== -1) return 1;
+    return rawA.localeCompare(rawB);
+  });
 
   // Pie chart status data
   const pieData = [

@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 export const StudentDashboardView: React.FC = () => {
-  const { currentUser, routes, buses, stops, setStudentTab, settings } = useApp();
+  const { currentUser, routes, buses, stops, setStudentTab, settings, payments } = useApp();
 
   if (!currentUser) return null;
 
@@ -14,168 +14,209 @@ export const StudentDashboardView: React.FC = () => {
   const bs = buses.find(b => b.id === currentUser.busId);
   const sp = stops.find(s => s.id === currentUser.stopId);
 
-  const term1Paid = currentUser.paidAmount >= currentUser.term1Fee;
-  const term2Paid = currentUser.paidAmount >= (currentUser.term1Fee + currentUser.term2Fee);
+  // Retrieve dates of payments for term 1 and term 2
+  const studentPayments = payments ? payments.filter(p => 
+    (p.studentId === currentUser.studentId || p.studentId === currentUser.id) && 
+    (p.status?.toLowerCase() === 'completed')
+  ) : [];
+
+  const term1Payment = studentPayments.find(p => p.term === 'term1' || p.term === 'both');
+  const term2Payment = studentPayments.find(p => p.term === 'term2' || p.term === 'both');
+
+  const term1Paid = !!term1Payment;
+  const term2Paid = !!term2Payment;
+
+  const term1Date = term1Payment 
+    ? new Date(term1Payment.paymentDate || (term1Payment as any).date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) 
+    : null;
+
+  const term2Date = term2Payment 
+    ? new Date(term2Payment.paymentDate || (term2Payment as any).date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) 
+    : null;
+
+  const isFullyPaid = currentUser.pendingAmount <= 0;
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-300">
+    <div className="space-y-6 animate-in fade-in duration-300">
       
-      {/* Welcome Banner Card */}
-      <div className="bg-gradient-to-br from-indigo-900 via-slate-900 to-slate-950 p-8 md:p-10 rounded-3xl text-white shadow-xl relative overflow-hidden flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border border-slate-800">
+      {/* Welcome Banner Card with elegant Medium Text */}
+      <div className="bg-gradient-to-br from-indigo-900 via-slate-900 to-slate-950 p-6 md:p-8 rounded-2xl text-white shadow-xl relative overflow-hidden flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border border-indigo-500/30">
         <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
         
-        <div className="space-y-2 relative z-10">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-bold font-mono">
-            ID: {currentUser.studentId}
+        <div className="space-y-3 relative z-10">
+          <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-indigo-500/30 text-indigo-200 text-xs font-bold tracking-wider">
+            🚌 ROSTER NO: {currentUser.studentId}
           </div>
-          <h2 className="text-3xl md:text-4xl font-black tracking-tight">
+          <h2 className="text-xl md:text-3xl font-bold tracking-tight leading-tight">
             Hello, {currentUser.name}! 👋
           </h2>
-          <p className="text-slate-400 text-xs flex items-center gap-2 font-medium">
+          <p className="text-slate-350 text-sm md:text-base flex flex-wrap items-center gap-2 font-semibold">
             <span>Class {currentUser.class} • Section {currentUser.section}</span>
-            <span>•</span>
-            <span className="text-indigo-400 font-semibold">{settings.academicYear}</span>
+            <span className="hidden md:inline">•</span>
+            <span className="text-indigo-300 font-bold bg-indigo-950/60 px-3 py-0.5 rounded-lg border border-indigo-800 text-xs">
+              {settings.academicYear || '2026-2027'} Year
+            </span>
           </p>
         </div>
 
-        <div className="relative z-10 bg-white/10 backdrop-blur-md p-5 rounded-2xl border border-white/10 text-right shrink-0 min-w-[180px]">
-          <span className="text-[10px] uppercase font-bold text-slate-300 block">Total Due Balance</span>
-          <span className="text-3xl font-mono font-black text-amber-400">
+        <div className="relative z-10 bg-slate-900/80 p-5 rounded-2xl border border-indigo-500/30 text-left md:text-right shrink-0 w-full md:w-auto min-w-[240px] shadow-md">
+          <span className="text-xs uppercase font-bold text-indigo-300 block tracking-widest">PENDING BALANCE TO PAY</span>
+          <span className="text-2xl md:text-3xl font-mono font-black text-amber-400 block mt-1">
             {settings.currency}{currentUser.pendingAmount}
           </span>
-          {currentUser.pendingAmount > 0 && (
+          {currentUser.pendingAmount > 0 ? (
             <button
               onClick={() => setStudentTab('payment')}
-              className="mt-3 w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              className="mt-4 w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
             >
-              Pay Now <ArrowRight className="w-3.5 h-3.5" />
+              Pay My Fees Now <ArrowRight className="w-4 h-4" />
             </button>
+          ) : (
+            <div className="mt-4 w-full py-2 bg-emerald-950/60 text-emerald-300 border border-emerald-500/40 rounded-xl text-xs font-bold flex items-center justify-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-450" /> ALL FEES COMPLETED!
+            </div>
           )}
         </div>
       </div>
 
-      {/* Quick Cards Requested in Prompt: Term 1 Status, Term 2 Status, Pending Amount */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      {/* Quick Cards with elegant Medium Labels */}
+      <div className={`grid grid-cols-1 ${isFullyPaid ? 'md:grid-cols-2' : 'md:grid-cols-3'} gap-6`}>
         
         {/* Card 1: Term 1 Status */}
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center justify-between">
-          <div>
-            <span className="text-slate-400 text-[10px] uppercase font-bold tracking-wider block">Term 1 Fee Status</span>
-            <div className="text-xl font-bold text-slate-900 dark:text-white mt-1">
-              ${currentUser.term1Fee}
+        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center justify-between hover:scale-[1.01] transition-transform">
+          <div className="space-y-3">
+            <span className="text-slate-500 dark:text-slate-400 text-xs uppercase font-bold tracking-widest block">Term 1 Fees</span>
+            <div className="text-2xl font-mono font-bold text-slate-900 dark:text-white">
+              {settings.currency}{currentUser.term1Fee}
             </div>
-            <div className="mt-2">
+            <div className="pt-1">
               {term1Paid ? (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold">
-                  <CheckCircle2 className="w-3 h-3" /> SETTLED
-                </span>
+                <div className="flex flex-col gap-1">
+                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 text-xs font-bold self-start border border-emerald-300/40">
+                    <CheckCircle2 className="w-4 h-4" /> PAID FULL ✅
+                  </span>
+                  {term1Date && (
+                    <span className="text-xs font-semibold text-slate-500 block mt-1">
+                      Date Paid: {term1Date}
+                    </span>
+                  )}
+                </div>
               ) : (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 text-[10px] font-bold">
-                  <AlertTriangle className="w-3 h-3" /> PENDING DUE
+                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300 text-xs font-bold border border-rose-300/40">
+                  <AlertTriangle className="w-4 h-4" /> NOT PAID YET ❌
                 </span>
               )}
             </div>
           </div>
-          <div className={`p-4 rounded-2xl ${term1Paid ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950' : 'bg-amber-50 text-amber-600 dark:bg-amber-950'}`}>
-            <ShieldCheck className="w-6 h-6" />
+          <div className={`p-3 rounded-xl ${term1Paid ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950' : 'bg-rose-50 text-rose-600 dark:bg-rose-950'}`}>
+            <ShieldCheck className="w-8 h-8" />
           </div>
         </div>
 
         {/* Card 2: Term 2 Status */}
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center justify-between">
-          <div>
-            <span className="text-slate-400 text-[10px] uppercase font-bold tracking-wider block">Term 2 Fee Status</span>
-            <div className="text-xl font-bold text-slate-900 dark:text-white mt-1">
-              ${currentUser.term2Fee}
+        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center justify-between hover:scale-[1.01] transition-transform">
+          <div className="space-y-3">
+            <span className="text-slate-500 dark:text-slate-400 text-xs uppercase font-bold tracking-widest block">Term 2 Fees</span>
+            <div className="text-2xl font-mono font-bold text-slate-900 dark:text-white">
+              {settings.currency}{currentUser.term2Fee}
             </div>
-            <div className="mt-2">
+            <div className="pt-1">
               {term2Paid ? (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold">
-                  <CheckCircle2 className="w-3 h-3" /> SETTLED
-                </span>
+                <div className="flex flex-col gap-1">
+                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 text-xs font-bold self-start border border-emerald-300/40">
+                    <CheckCircle2 className="w-4 h-4" /> PAID FULL ✅
+                  </span>
+                  {term2Date && (
+                    <span className="text-xs font-semibold text-slate-500 block mt-1">
+                      Date Paid: {term2Date}
+                    </span>
+                  )}
+                </div>
               ) : (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 text-[10px] font-bold">
-                  <AlertTriangle className="w-3 h-3" /> DUE SOON
+                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300 text-xs font-bold border border-rose-300/40">
+                  <AlertTriangle className="w-4 h-4" /> NOT PAID YET ❌
                 </span>
               )}
             </div>
           </div>
-          <div className={`p-4 rounded-2xl ${term2Paid ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950' : 'bg-rose-50 text-rose-600 dark:bg-rose-950'}`}>
-            <CreditCard className="w-6 h-6" />
+          <div className={`p-3 rounded-xl ${term2Paid ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950' : 'bg-rose-50 text-rose-600 dark:bg-rose-950'}`}>
+            <CreditCard className="w-8 h-8" />
           </div>
         </div>
 
-        {/* Card 3: Pending Amount Summary */}
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center justify-between">
-          <div>
-            <span className="text-slate-400 text-[10px] uppercase font-bold tracking-wider block">Net Pending Amount</span>
-            <div className="text-2xl font-mono font-black text-rose-600 dark:text-rose-400 mt-1">
-              {settings.currency}{currentUser.pendingAmount}
+        {/* Card 3: Net Pending Amount Summary */}
+        {!isFullyPaid && (
+          <div className="bg-rose-50/50 dark:bg-rose-950/20 p-6 rounded-2xl border border-rose-200 dark:border-rose-900/60 shadow-sm flex items-center justify-between hover:scale-[1.01] transition-transform">
+            <div className="space-y-3">
+              <span className="text-rose-800 dark:text-rose-300 text-xs uppercase font-bold tracking-widest block">Net Pending Amount</span>
+              <div className="text-2xl font-mono font-bold text-rose-600 dark:text-rose-400">
+                {settings.currency}{currentUser.pendingAmount}
+              </div>
+              <div className="text-xs font-semibold text-slate-500 block mt-1">
+                Total paid till now: {settings.currency}{currentUser.paidAmount}
+              </div>
             </div>
-            <div className="text-[10px] text-slate-400 mt-2 font-mono">
-              Paid to date: {settings.currency}{currentUser.paidAmount}
+            <div className="p-3 rounded-xl bg-rose-100 dark:bg-rose-900/40 text-rose-600">
+              <AlertTriangle className="w-8 h-8" />
             </div>
           </div>
-          <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/60 text-rose-600">
-            <AlertTriangle className="w-6 h-6" />
-          </div>
-        </div>
+        )}
 
       </div>
 
-      {/* Transit Logistics Card Requested in Prompt: Route Name, Bus Number, Driver Name, Driver Phone, Pickup Stop, Pickup Time */}
-      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 p-8 shadow-xs space-y-6">
-        <div className="flex items-center justify-between border-b pb-5">
+      {/* Transit Logistics Card */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 md:p-8 shadow-sm space-y-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b pb-6">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-md">
-              <Bus className="w-6 h-6" />
+            <div className="p-3 bg-indigo-600 text-white rounded-xl shadow-md">
+              <Bus className="w-8 h-8" />
             </div>
             <div>
-              <h3 className="font-bold text-lg text-slate-900 dark:text-white">Daily Transit Logistics Summary</h3>
-              <p className="text-xs text-slate-500">Live GPS tracking simulator & driver contact point</p>
+              <h3 className="font-bold text-lg text-slate-900 dark:text-white leading-snug">My School Bus Details</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Pickup, drop and driver phone number listed below</p>
             </div>
           </div>
-          <span className="font-mono text-xs font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-950 px-3 py-1.5 rounded-xl">
-            {bs?.busNumber || 'BUS-101'}
+          <span className="font-mono text-sm font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-900 px-4 py-2 rounded-xl shadow-inner shrink-0">
+            🚌 BUS NUMBER: {bs?.busNumber || 'BUS-101'}
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           
-          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border space-y-1">
-            <span className="text-slate-400 uppercase tracking-wider font-bold text-[10px] flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-indigo-500" /> Allocated Route Name
+          <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 space-y-2">
+            <span className="text-slate-400 dark:text-slate-500 uppercase tracking-widest font-bold text-xs flex items-center gap-1.5">
+              <MapPin className="w-4 h-4 text-indigo-500 shrink-0" /> ROUTE NAME / AREA
             </span>
-            <div className="font-bold text-slate-800 dark:text-slate-200 text-sm">
+            <div className="font-bold text-slate-900 dark:text-slate-100 text-base">
               {rt?.name || 'Standard Transit Corridor'}
             </div>
-            <div className="text-[11px] text-slate-500 truncate">{rt?.description}</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">{rt?.description}</div>
           </div>
 
-          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border space-y-1">
-            <span className="text-slate-400 uppercase tracking-wider font-bold text-[10px] flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-emerald-500" /> Pickup Stop & Timing
+          <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 space-y-2">
+            <span className="text-slate-400 dark:text-slate-500 uppercase tracking-widest font-bold text-xs flex items-center gap-1.5">
+              <Clock className="w-4 h-4 text-emerald-500 shrink-0" /> BUS STOP & TIME
             </span>
-            <div className="font-bold text-slate-800 dark:text-slate-200 text-sm">
+            <div className="font-bold text-slate-900 dark:text-slate-100 text-base">
               {sp?.stopName || 'Campus Main Gate'}
             </div>
-            <div className="font-mono text-emerald-600 font-black text-xs">
-              ⚡ {sp?.pickupTime || '07:30 AM'} SHARP
+            <div className="font-mono text-emerald-800 dark:text-emerald-350 font-bold text-xs mt-1 bg-emerald-100 dark:bg-emerald-950/80 px-2.5 py-1 rounded-lg border border-emerald-300/40 inline-block">
+              🕒 {sp?.pickupTime || '07:30 AM'} MORNING SHARP
             </div>
           </div>
 
-          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border space-y-1 sm:col-span-2 lg:col-span-1">
-            <span className="text-slate-400 uppercase tracking-wider font-bold text-[10px] flex items-center gap-1.5">
-              <User className="w-3.5 h-3.5 text-blue-500" /> Designated Bus Driver
+          <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 space-y-2 sm:col-span-2 lg:col-span-1">
+            <span className="text-slate-400 dark:text-slate-500 uppercase tracking-widest font-bold text-xs flex items-center gap-1.5">
+              <User className="w-4 h-4 text-blue-500 shrink-0" /> BUS DRIVER NAME
             </span>
-            <div className="font-bold text-slate-800 dark:text-slate-200 text-sm">
+            <div className="font-bold text-slate-900 dark:text-slate-100 text-base">
               {bs?.driverName || 'Rajesh Verma'}
             </div>
             <a 
               href={`tel:${bs?.driverPhone}`}
-              className="font-mono text-indigo-600 dark:text-indigo-400 font-bold hover:underline flex items-center gap-1 mt-1"
+              className="mt-2 w-full py-2 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center gap-1.5 shadow-sm transition-all"
             >
-              <Phone className="w-3 h-3" /> {bs?.driverPhone || '+1 (555) 381-9921'}
+              📞 CALL DRIVER: {bs?.driverPhone || '+1 (555) 381-9921'}
             </a>
           </div>
 

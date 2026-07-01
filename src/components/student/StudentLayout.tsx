@@ -53,13 +53,6 @@ export const StudentLayout: React.FC<{ children: React.ReactNode }> = ({ childre
           </button>
 
           <button
-            onClick={() => switchDemoRole('admin')}
-            className="hidden md:flex text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline items-center gap-1 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/40 rounded-xl border border-indigo-100 dark:border-indigo-900"
-          >
-            Simulate Admin Officer
-          </button>
-
-          <button
             onClick={logout}
             className="p-2 md:px-3.5 md:py-2 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 text-rose-600 dark:text-rose-400 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
           >

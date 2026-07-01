@@ -13,8 +13,13 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Initialize Database
-  initDatabase();
+  // Initialize Database before starting the server
+  try {
+    await initDatabase();
+  } catch (error) {
+    console.error('🚨 FATAL: Database connection is not established. Cannot start the server:', error);
+    process.exit(1);
+  }
 
   // Middleware
   app.use(cors());

@@ -11,7 +11,8 @@ export const PaymentManagementView: React.FC = () => {
   const { students, payments, markAsPaidAdmin, settings } = useApp();
   
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'ALL' | 'paid' | 'pending' | 'term1' | 'term2'>('ALL');
+  const [filterStatus, setFilterStatus] = useState<'ALL' | 'pending' | 'paid'>('ALL');
+  const [filterTerm, setFilterTerm] = useState<'all' | 'term1' | 'term2'>('all');
   
   const [selectedReceipt, setSelectedReceipt] = useState<any | null>(null);
   const [payModalStudent, setPayModalStudent] = useState<any | null>(null);
@@ -19,6 +20,15 @@ export const PaymentManagementView: React.FC = () => {
   const [payMethod, setPayMethod] = useState<'Cash' | 'Online Card' | 'UPI' | 'Cheque'>('Cash');
   const [remarks, setRemarks] = useState('');
 
+  // Helper functions to check payment status
+  const isTerm1Paid = (studentId: string) => {
+    return payments.some(p => p.studentId === studentId && (p.term === 'term1' || p.term === 'both'));
+  };
+
+  const isTerm2Paid = (studentId: string) => {
+    return payments.some(p => p.studentId === studentId && (p.term === 'term2' || p.term === 'both'));
+  };
+ 
   // Filtered Students with Dues
   const filteredStudents = useMemo(() => {
     return students.filter(st => {
@@ -26,22 +36,40 @@ export const PaymentManagementView: React.FC = () => {
       const matchSearch = !q || st.name.toLowerCase().includes(q) || st.studentId.toLowerCase().includes(q);
       
       let matchFilter = true;
-      if (filterStatus === 'paid') matchFilter = st.status === 'paid';
-      if (filterStatus === 'pending') matchFilter = st.status === 'pending' || st.status === 'partial';
-      if (filterStatus === 'term1') matchFilter = st.paidAmount >= st.term1Fee;
-      if (filterStatus === 'term2') matchFilter = st.paidAmount >= (st.term1Fee + st.term2Fee);
+      if (filterStatus === 'paid') {
+        if (filterTerm === 'all') matchFilter = isTerm1Paid(st.studentId) && isTerm2Paid(st.studentId);
+        else if (filterTerm === 'term1') matchFilter = isTerm1Paid(st.studentId);
+        else if (filterTerm === 'term2') matchFilter = isTerm2Paid(st.studentId);
+      } else if (filterStatus === 'pending') {
+        if (filterTerm === 'all') matchFilter = !isTerm1Paid(st.studentId) && !isTerm2Paid(st.studentId);
+        else if (filterTerm === 'term1') matchFilter = !isTerm1Paid(st.studentId);
+        else if (filterTerm === 'term2') matchFilter = !isTerm2Paid(st.studentId);
+      }
 
       return matchSearch && matchFilter;
     });
-  }, [students, searchQuery, filterStatus]);
+  }, [students, payments, searchQuery, filterStatus, filterTerm]);
+ 
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleExecutePayment = (e: React.FormEvent) => {
+  const handleExecutePayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!payModalStudent) return;
-    markAsPaidAdmin(payModalStudent.studentId, payTerm, payMethod, remarks || 'Collected at Finance Counter');
-    setPayModalStudent(null);
+    if (!payModalStudent || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      const res = await markAsPaidAdmin(payModalStudent.studentId, payTerm, payMethod, remarks || 'Collected at Finance Counter');
+      if (res && res.error) {
+        alert(res.error);
+      } else {
+        setPayModalStudent(null);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Payment execution failed');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
-
+ 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       
@@ -62,17 +90,37 @@ export const PaymentManagementView: React.FC = () => {
             </button>
           )}
         </div>
+ 
+        <div className="flex flex-col sm:flex-row flex-wrap gap-4 items-center">
+          <div className="flex flex-wrap gap-1.5 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl text-xs font-semibold">
+            {(['ALL', 'pending', 'paid'] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => {
+                  setFilterStatus(tab);
+                  if (tab === 'ALL') setFilterTerm('all');
+                }}
+                className={`px-3.5 py-2 rounded-xl capitalize transition-all cursor-pointer ${filterStatus === tab ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 font-bold shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                {tab === 'ALL' ? 'All Directory' : tab === 'pending' ? 'Pending Dues' : 'Paid'}
+              </button>
+            ))}
+          </div>
 
-        <div className="flex flex-wrap gap-1.5 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl text-xs font-semibold">
-          {(['ALL', 'pending', 'paid', 'term1', 'term2'] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setFilterStatus(tab)}
-              className={`px-3.5 py-2 rounded-xl capitalize transition-all cursor-pointer ${filterStatus === tab ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 font-bold shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
-            >
-              {tab === 'ALL' ? 'All Directory' : tab === 'pending' ? 'Pending Dues' : tab}
-            </button>
-          ))}
+          {filterStatus !== 'ALL' && (
+            <div className="flex flex-wrap gap-1.5 bg-indigo-50/50 dark:bg-indigo-900/10 p-1.5 rounded-2xl text-xs font-semibold border border-indigo-100/30">
+              <span className="self-center text-[10px] uppercase font-bold text-indigo-500/80 px-2">By Term:</span>
+              {(['all', 'term1', 'term2'] as const).map((termOption) => (
+                <button
+                  key={termOption}
+                  onClick={() => setFilterTerm(termOption)}
+                  className={`px-3 py-1.5 rounded-xl capitalize transition-all cursor-pointer ${filterTerm === termOption ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 font-bold shadow-sm' : 'text-slate-500 hover:text-indigo-600'}`}
+                >
+                  {termOption === 'all' ? 'Full Year' : termOption === 'term1' ? 'Term 1' : 'Term 2'}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -109,8 +157,8 @@ export const PaymentManagementView: React.FC = () => {
                         <div className="font-mono text-[10px] text-slate-400">{st.studentId}</div>
                       </td>
                       <td className="px-6 py-4 font-semibold">{st.class} - {st.section}</td>
-                      <td className="px-6 py-4 font-mono">${st.term1Fee}</td>
-                      <td className="px-6 py-4 font-mono">${st.term2Fee}</td>
+                      <td className="px-6 py-4 font-mono">{settings.currency}{st.term1Fee}</td>
+                      <td className="px-6 py-4 font-mono">{settings.currency}{st.term2Fee}</td>
                       <td className="px-6 py-4 font-mono font-bold text-rose-600 dark:text-rose-400 text-sm">
                         {settings.currency}{st.pendingAmount}
                       </td>
@@ -212,9 +260,9 @@ export const PaymentManagementView: React.FC = () => {
                   onChange={e => setPayTerm(e.target.value as any)}
                   className="w-full p-2.5 rounded-xl border bg-slate-50 dark:bg-slate-800"
                 >
-                  <option value="both">Both Terms (Full Year Due: ${payModalStudent.pendingAmount})</option>
-                  <option value="term1">Term 1 Only (${payModalStudent.term1Fee})</option>
-                  <option value="term2">Term 2 Only (${payModalStudent.term2Fee})</option>
+                  <option value="both">Both Terms (Full Year Due: {settings.currency}{payModalStudent.pendingAmount})</option>
+                  <option value="term1">Term 1 Only ({settings.currency}{payModalStudent.term1Fee})</option>
+                  <option value="term2">Term 2 Only ({settings.currency}{payModalStudent.term2Fee})</option>
                 </select>
               </div>
 
@@ -245,8 +293,10 @@ export const PaymentManagementView: React.FC = () => {
               </div>
 
               <div className="flex justify-end gap-2 pt-4 border-t">
-                <button type="button" onClick={() => setPayModalStudent(null)} className="px-4 py-2 rounded-xl text-slate-500">Cancel</button>
-                <button type="submit" className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md">Confirm Settlement</button>
+                <button type="button" disabled={isSubmitting} onClick={() => setPayModalStudent(null)} className="px-4 py-2 rounded-xl text-slate-500 disabled:opacity-50">Cancel</button>
+                <button type="submit" disabled={isSubmitting} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md disabled:opacity-50">
+                  {isSubmitting ? 'Processing...' : 'Confirm Settlement'}
+                </button>
               </div>
             </form>
           </div>

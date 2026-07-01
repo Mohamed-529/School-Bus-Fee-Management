@@ -1,12 +1,9 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import axios from 'axios';
 import { 
   Student, Bus, Route, Stop, PaymentRecord, SchoolSettings, 
-  AuditLog, ToastMessage, Role, AdminActiveTab, StudentActiveTab 
+  AuditLog, ToastMessage, Role, AdminActiveTab, StudentActiveTab, PaymentStatus 
 } from '../types';
-import { 
-  initialStudents, initialBuses, initialRoutes, initialStops, 
-  initialPayments, initialSettings, initialAuditLogs 
-} from '../data/seedData';
 
 interface AppContextType {
   // Auth state
@@ -16,7 +13,7 @@ interface AppContextType {
   setSplashCompleted: (val: boolean) => void;
   rememberMe: boolean;
   setRememberMe: (val: boolean) => void;
-  login: (identifier: string, pass: string, role: Role) => boolean;
+  login: (identifier: string, pass: string, role: Role) => Promise<boolean>;
   logout: () => void;
   switchDemoRole: (role: Role) => void;
 
@@ -41,89 +38,102 @@ interface AppContextType {
   auditLogs: AuditLog[];
 
   // CRUD Students
-  addStudent: (student: Omit<Student, 'id' | 'paidAmount' | 'pendingAmount' | 'status'>) => { success: boolean; error?: string };
-  updateStudent: (id: string, data: Partial<Student>) => { success: boolean; error?: string };
-  deleteStudent: (id: string) => { success: boolean; error?: string };
-  bulkImportStudents: (imported: Array<Partial<Student>>) => { success: boolean; count: number; duplicates: number };
+  addStudent: (student: Omit<Student, 'id' | 'paidAmount' | 'pendingAmount' | 'status'>) => Promise<{ success: boolean; error?: string }>;
+  updateStudent: (id: string, data: Partial<Student>) => Promise<{ success: boolean; error?: string }>;
+  deleteStudent: (id: string) => Promise<{ success: boolean; error?: string }>;
+  bulkImportStudents: (imported: Array<Partial<Student>>) => Promise<{ success: boolean; count: number; duplicates: number }>;
 
   // CRUD Payments
-  recordPayment: (studentId: string, amount: number, term: 'term1' | 'term2' | 'both', method: PaymentRecord['method']) => { success: boolean; receipt?: PaymentRecord; error?: string };
-  markAsPaidAdmin: (studentId: string, term: 'term1' | 'term2' | 'both', method: PaymentRecord['method'], remarks?: string) => { success: boolean; error?: string };
+  recordPayment: (studentId: string, amount: number, term: 'term1' | 'term2' | 'both', method: PaymentRecord['method']) => Promise<{ success: boolean; receipt?: PaymentRecord; error?: string }>;
+  markAsPaidAdmin: (studentId: string, term: 'term1' | 'term2' | 'both', method: PaymentRecord['method'], remarks?: string) => Promise<{ success: boolean; error?: string }>;
 
   // CRUD Buses
-  addBus: (bus: Omit<Bus, 'id'>) => { success: boolean; error?: string };
-  updateBus: (id: string, data: Partial<Bus>) => void;
-  deleteBus: (id: string) => { success: boolean; error?: string };
+  addBus: (bus: Omit<Bus, 'id'>) => Promise<{ success: boolean; error?: string }>;
+  updateBus: (id: string, data: Partial<Bus>) => Promise<void>;
+  deleteBus: (id: string) => Promise<{ success: boolean; error?: string }>;
 
   // CRUD Routes
-  addRoute: (route: Omit<Route, 'id'>) => { success: boolean; error?: string };
-  updateRoute: (id: string, data: Partial<Route>) => void;
-  deleteRoute: (id: string) => { success: boolean; error?: string };
+  addRoute: (route: Omit<Route, 'id'>) => Promise<{ success: boolean; error?: string }>;
+  updateRoute: (id: string, data: Partial<Route>) => Promise<void>;
+  deleteRoute: (id: string) => Promise<{ success: boolean; error?: string }>;
 
   // CRUD Stops
-  addStop: (stop: Omit<Stop, 'id'>) => void;
-  updateStop: (id: string, data: Partial<Stop>) => void;
-  deleteStop: (id: string) => void;
-  reorderStops: (routeId: string, orderedStopIds: string[]) => void;
+  addStop: (stop: Omit<Stop, 'id'>) => Promise<void>;
+  updateStop: (id: string, data: Partial<Stop>) => Promise<void>;
+  deleteStop: (id: string) => Promise<void>;
+  reorderStops: (routeId: string, orderedStopIds: string[]) => Promise<void>;
 
   // Settings & Logs
-  updateSettings: (newSettings: Partial<SchoolSettings>) => void;
+  updateSettings: (newSettings: Partial<SchoolSettings>) => Promise<void>;
   resetToSeedData: () => void;
   addAuditLog: (action: string, module: string, details: string) => void;
+  selectedAcademicYear: string;
+  setSelectedAcademicYear: (year: string) => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
 
 const STORAGE_KEYS = {
-  STUDENTS: 'sbfms_students_v1',
-  BUSES: 'sbfms_buses_v1',
-  ROUTES: 'sbfms_routes_v1',
-  STOPS: 'sbfms_stops_v1',
-  PAYMENTS: 'sbfms_payments_v1',
-  SETTINGS: 'sbfms_settings_v1',
-  AUDIT: 'sbfms_audit_v1',
   USER: 'sbfms_current_user_v1',
   ROLE: 'sbfms_current_role_v1',
   DARK_MODE: 'sbfms_dark_mode_v1',
 };
 
+// Create a custom interceptable Axios client that handles authorization
+const api = axios.create({
+  baseURL: ''
+});
+
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('sbfms_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+}, (error) => {
+  return Promise.reject(error);
+});
+
+const normalizeStudent = (st: Student): Student => {
+  let phone = st.parentPhone || '';
+  if (phone.startsWith('+1 (555)')) {
+    phone = phone.replace('+1 (555) ', '+91 9');
+  }
+  return {
+    ...st,
+    parentPhone: phone,
+    academicYear: st.academicYear || '2026 - 2027'
+  };
+};
+
+const normalizePayment = (pay: PaymentRecord): PaymentRecord => {
+  return {
+    ...pay,
+    academicYear: pay.academicYear || '2026 - 2027'
+  };
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Load initial data from localStorage or seed
-  const [students, setStudents] = useState<Student[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.STUDENTS);
-    return saved ? JSON.parse(saved) : initialStudents;
+  // Data state variables
+  const [students, setStudents] = useState<Student[]>([]);
+  const [buses, setBuses] = useState<Bus[]>([]);
+  const [routes, setRoutes] = useState<Route[]>([]);
+  const [stops, setStops] = useState<Stop[]>([]);
+  const [payments, setPayments] = useState<PaymentRecord[]>([]);
+  const [settings, setSettings] = useState<SchoolSettings>({
+    schoolName: 'School Bus Transportation',
+    academicYear: '2026 - 2027',
+    logoUrl: '',
+    currency: '$',
+    supportPhone: '9876543210',
+    supportEmail: 'support@school.edu',
+    term1DueDate: '2026-10-31',
+    term2DueDate: '2027-03-31',
+    paymentGatewaysEnabled: true
   });
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
 
-  const [buses, setBuses] = useState<Bus[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.BUSES);
-    return saved ? JSON.parse(saved) : initialBuses;
-  });
-
-  const [routes, setRoutes] = useState<Route[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.ROUTES);
-    return saved ? JSON.parse(saved) : initialRoutes;
-  });
-
-  const [stops, setStops] = useState<Stop[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.STOPS);
-    return saved ? JSON.parse(saved) : initialStops;
-  });
-
-  const [payments, setPayments] = useState<PaymentRecord[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.PAYMENTS);
-    return saved ? JSON.parse(saved) : initialPayments;
-  });
-
-  const [settings, setSettings] = useState<SchoolSettings>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-    return saved ? JSON.parse(saved) : initialSettings;
-  });
-
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.AUDIT);
-    return saved ? JSON.parse(saved) : initialAuditLogs;
-  });
-
+  // Auth and UI state variables
   const [currentRole, setCurrentRole] = useState<Role>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.ROLE);
     return (saved as Role) || 'admin';
@@ -141,55 +151,74 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return localStorage.getItem(STORAGE_KEYS.DARK_MODE) === 'true';
   });
 
+  const [selectedAcademicYear, setSelectedAcademicYear] = useState<string>(() => {
+    return localStorage.getItem('sbfms_selected_academic_year') || '2026 - 2027';
+  });
+
   const [adminTab, setAdminTab] = useState<AdminActiveTab>('dashboard');
   const [studentTab, setStudentTab] = useState<StudentActiveTab>('dashboard');
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  // Sync state to localStorage
-  useEffect(() => { localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(students)); }, [students]);
-  useEffect(() => { localStorage.setItem(STORAGE_KEYS.BUSES, JSON.stringify(buses)); }, [buses]);
-  useEffect(() => { localStorage.setItem(STORAGE_KEYS.ROUTES, JSON.stringify(routes)); }, [routes]);
-  useEffect(() => { localStorage.setItem(STORAGE_KEYS.STOPS, JSON.stringify(stops)); }, [stops]);
-  useEffect(() => { localStorage.setItem(STORAGE_KEYS.PAYMENTS, JSON.stringify(payments)); }, [payments]);
-  useEffect(() => { localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings)); }, [settings]);
-  useEffect(() => { localStorage.setItem(STORAGE_KEYS.AUDIT, JSON.stringify(auditLogs)); }, [auditLogs]);
+  // Centralized academic year filtering
+  const filteredStudents = useMemo(() => {
+    return students.filter(s => s.academicYear === selectedAcademicYear);
+  }, [students, selectedAcademicYear]);
+
+  const filteredPayments = useMemo(() => {
+    return payments.filter(p => p.academicYear === selectedAcademicYear);
+  }, [payments, selectedAcademicYear]);
+
+  // Sync state helpers to localStorage for UI settings
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.ROLE, currentRole); }, [currentRole]);
   useEffect(() => { 
     if (currentUser) localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(currentUser));
     else localStorage.removeItem(STORAGE_KEYS.USER);
   }, [currentUser]);
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.DARK_MODE, String(darkMode)); }, [darkMode]);
+  useEffect(() => { localStorage.setItem('sbfms_selected_academic_year', selectedAcademicYear); }, [selectedAcademicYear]);
 
-  // Sync with full-stack Express API backend
-  useEffect(() => {
-    const hydrateFromCloudAPI = async () => {
-      try {
-        const [stRes, flRes, payRes, setRes] = await Promise.all([
-          fetch('/api/students').then(r => r.ok ? r.json() : null).catch(() => null),
-          fetch('/api/fleet').then(r => r.ok ? r.json() : null).catch(() => null),
-          fetch('/api/payments').then(r => r.ok ? r.json() : null).catch(() => null),
-          fetch('/api/settings').then(r => r.ok ? r.json() : null).catch(() => null),
-        ]);
-        if (stRes?.students) setStudents(stRes.students);
-        if (flRes?.buses) setBuses(flRes.buses);
-        if (flRes?.routes) setRoutes(flRes.routes);
-        if (flRes?.stops) setStops(flRes.stops);
-        if (payRes?.payments) setPayments(payRes.payments);
-        if (setRes?.settings) setSettings(setRes.settings);
-        console.log('✅ Synchronized state from Cloud Express API');
-      } catch (err) {
-        console.warn('⚠️ Cloud API unreachable, fallback to local storage state');
+  // Centralized fetch function from MongoDB Atlas
+  const refreshAllData = async () => {
+    try {
+      const [stRes, flRes, payRes, setRes, logRes] = await Promise.all([
+        api.get('/api/students'),
+        api.get('/api/fleet'),
+        api.get('/api/payments'),
+        api.get('/api/settings'),
+        api.get('/api/logs').catch(() => ({ data: { logs: [] } }))
+      ]);
+
+      if (stRes.data?.students) {
+        setStudents(stRes.data.students.map(normalizeStudent));
       }
-    };
-    hydrateFromCloudAPI();
+      if (flRes.data?.buses) setBuses(flRes.data.buses);
+      if (flRes.data?.routes) setRoutes(flRes.data.routes);
+      if (flRes.data?.stops) setStops(flRes.data.stops);
+      if (payRes.data?.payments) {
+        setPayments(payRes.data.payments.map(normalizePayment));
+      }
+      if (setRes.data?.settings) setSettings(setRes.data.settings);
+      if (logRes.data?.logs) setAuditLogs(logRes.data.logs);
+
+      console.log('🔄 Synced fresh state from MongoDB Atlas Atlas');
+    } catch (err) {
+      console.error('⚠️ Could not connect to Atlas DB', err);
+    }
+  };
+
+  // Sync with MongoDB API backend on mount
+  useEffect(() => {
+    refreshAllData();
   }, []);
 
-  // Apply dark mode class to html tag
+  // Apply dark mode class to html and body tags
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark');
+      document.body.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
+      document.body.classList.remove('dark');
     }
   }, [darkMode]);
 
@@ -207,377 +236,410 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setToasts(prev => prev.filter(t => t.id !== id));
   };
 
-  const addAuditLog = (action: string, module: string, details: string) => {
-    const newLog: AuditLog = {
-      id: 'log-' + Date.now(),
-      timestamp: new Date().toISOString(),
-      actor: currentUser?.name || 'System Actor',
-      role: currentRole,
-      action,
-      module,
-      details,
-    };
-    setAuditLogs(prev => [newLog, ...prev]);
+  const addAuditLog = async (action: string, module: string, details: string) => {
+    // Audit logs are stored server side dynamically during MongoDB transactions
   };
 
-  // Auth Methods
-  const login = (identifier: string, pass: string, role: Role): boolean => {
-    if (role === 'admin') {
-      if (identifier.toLowerCase().includes('admin') || pass === 'admin123') {
-        setCurrentRole('admin');
-        const adminObj = { id: 'admin', name: 'Transport Admin', email: identifier || 'admin@school.edu' };
-        setCurrentUser(adminObj);
-        addAuditLog('LOGIN', 'Auth', `Admin logged in via ${identifier}`);
-        addToast('Welcome Admin', 'success', 'Logged into Admin Transport Dashboard');
-        return true;
-      }
-      addToast('Authentication Failed', 'error', 'Invalid Admin Credentials (Hint: admin@school.edu / admin123)');
-      return false;
-    } else {
-      // Student login
-      const found = students.find(s => s.studentId.toLowerCase() === identifier.toLowerCase() || s.name.toLowerCase() === identifier.toLowerCase());
-      if (found) {
-        if (!pass || pass === found.password || pass === 'pass123' || pass === 'password123') {
-          setCurrentRole('student');
-          setCurrentUser(found);
-          addAuditLog('LOGIN', 'Auth', `Student ${found.name} (${found.studentId}) logged in`);
-          addToast(`Welcome ${found.name}`, 'success', `Route: ${routes.find(r => r.id === found.routeId)?.name || 'Assigned Route'}`);
-          return true;
-        }
-      }
-      addToast('Student Not Found', 'error', 'Could not find student with that ID or incorrect password. (Hint demo: STU1001 / pass123)');
+  // Real API Login authentication
+  const login = async (identifier: string, pass: string, role: Role): Promise<boolean> => {
+    try {
+      const res = await api.post('/api/auth/login', { email: identifier, password: pass, role });
+      const { token, user } = res.data;
+      
+      localStorage.setItem('sbfms_token', token);
+      setCurrentRole(role);
+      setCurrentUser(user);
+      
+      addToast(`Welcome ${user.name}`, 'success', `Successfully authenticated session.`);
+      await refreshAllData();
+      return true;
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Authentication Failed';
+      addToast('Login Failed', 'error', errMsg);
       return false;
     }
   };
 
   const logout = () => {
-    const name = currentUser?.name || 'User';
+    localStorage.removeItem('sbfms_token');
+    localStorage.removeItem(STORAGE_KEYS.USER);
+    localStorage.removeItem(STORAGE_KEYS.ROLE);
     setCurrentUser(null);
-    addToast('Logged Out', 'info', `${name} logged out successfully`);
+    addToast('Logged Out', 'info', 'Your session has been securely ended.');
   };
 
-  const switchDemoRole = (role: Role) => {
-    setCurrentRole(role);
+  const switchDemoRole = async (role: Role) => {
     if (role === 'admin') {
-      setCurrentUser({ id: 'admin', name: 'Transport Admin', email: 'admin@school.edu' });
-      addToast('Switched to Admin View', 'info', 'Full management access activated');
+      await login('admin@school.edu', 'admin123', 'admin');
     } else {
-      setCurrentUser(students[0] || null);
-      addToast('Switched to Student View', 'info', `Viewing as ${students[0]?.name || 'Student'}`);
+      const defaultStudent = students[0];
+      if (defaultStudent) {
+        await login(defaultStudent.studentId, 'password123', 'student');
+      } else {
+        addToast('No students registered', 'warning', 'Please seed or add a student first.');
+      }
     }
   };
 
   // CRUD Students
-  const addStudent = (data: Omit<Student, 'id' | 'paidAmount' | 'pendingAmount' | 'status'>) => {
-    if (students.some(s => s.studentId.toLowerCase() === data.studentId.toLowerCase())) {
-      addToast('Duplicate Student ID', 'error', `Student ID ${data.studentId} already exists!`);
-      return { success: false, error: 'Duplicate Student ID' };
-    }
-    const totalFee = data.term1Fee + data.term2Fee;
-    const newStudent: Student = {
-      ...data,
-      id: 'stu-' + Date.now(),
-      paidAmount: 0,
-      pendingAmount: totalFee,
-      status: totalFee > 0 ? 'pending' : 'paid',
-    };
-    setStudents(prev => [newStudent, ...prev]);
-    fetch('/api/students', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newStudent) }).catch(() => {});
-    addAuditLog('ADD_STUDENT', 'Students', `Added student ${newStudent.name} (${newStudent.studentId})`);
-    addToast('Student Added', 'success', `${newStudent.name} enrolled to Class ${newStudent.class}-${newStudent.section}`);
-    return { success: true };
-  };
-
-  const updateStudent = (id: string, data: Partial<Student>) => {
-    setStudents(prev => prev.map(s => {
-      if (s.id !== id) return s;
-      const updated = { ...s, ...data };
-      const totalFee = updated.term1Fee + updated.term2Fee;
-      updated.pendingAmount = Math.max(0, totalFee - updated.paidAmount);
-      if (updated.paidAmount >= totalFee && totalFee > 0) updated.status = 'paid';
-      else if (updated.paidAmount > 0) updated.status = 'partial';
-      else updated.status = 'pending';
-      return updated;
-    }));
-    fetch(`/api/students/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).catch(() => {});
-    // If updating current logged in student
-    if (currentUser?.id === id) {
-      setCurrentUser((prev: any) => ({ ...prev, ...data }));
-    }
-    addAuditLog('EDIT_STUDENT', 'Students', `Updated student record ID: ${id}`);
-    addToast('Student Updated', 'success', 'Changes saved successfully');
-    return { success: true };
-  };
-
-  const deleteStudent = (id: string) => {
-    const target = students.find(s => s.id === id);
-    if (!target) return { success: false, error: 'Not found' };
-    
-    // Check payment history edge case
-    const hasPayments = payments.some(p => p.studentId === target.studentId);
-    if (hasPayments) {
-      addToast('Warning: Payment History', 'warning', `Deleted student ${target.name} who had past payment records.`);
+  const addStudent = async (data: Omit<Student, 'id' | 'paidAmount' | 'pendingAmount' | 'status'>) => {
+    // Validation: extract core 10 digits of phone
+    const digits = (data.parentPhone || '').replace(/\D/g, '');
+    const coreDigits = digits.length >= 10 ? digits.slice(-10) : digits;
+    if (coreDigits.length !== 10) {
+      addToast('Validation Error', 'error', 'Parent Phone Number must be exactly 10 digits!');
+      return { success: false, error: 'Phone must be exactly 10 digits.' };
     }
 
-    setStudents(prev => prev.filter(s => s.id !== id));
-    fetch(`/api/students/${id}`, { method: 'DELETE' }).catch(() => {});
-    addAuditLog('DELETE_STUDENT', 'Students', `Deleted student ${target.name} (${target.studentId})`);
-    addToast('Student Removed', 'info', `Deleted ${target.name} from directory`);
-    return { success: true };
-  };
-
-  const bulkImportStudents = (imported: Array<Partial<Student>>) => {
-    let count = 0;
-    let duplicates = 0;
-    const newArr = [...students];
-
-    imported.forEach(item => {
-      if (!item.studentId || !item.name) return;
-      if (newArr.some(s => s.studentId.toLowerCase() === item.studentId!.toLowerCase())) {
-        duplicates++;
-        return;
-      }
-      const t1 = item.term1Fee || settings.term1DueDate ? 600 : 500;
-      const t2 = item.term2Fee || 600;
-      const st: Student = {
-        id: 'stu-bulk-' + Math.random().toString(36).slice(2, 9),
-        studentId: item.studentId,
-        admissionNumber: item.admissionNumber || `ADM-${Date.now().toString().slice(-4)}`,
-        name: item.name,
-        password: item.password || 'password123',
-        class: item.class || '5',
-        section: item.section || 'A',
-        routeId: item.routeId || routes[0]?.id || 'r-1',
-        busId: item.busId || buses[0]?.id || 'b-1',
-        stopId: item.stopId || stops[0]?.id || 's-101',
-        parentName: item.parentName || `${item.name.split(' ')[0]} Parent`,
-        parentPhone: item.parentPhone || '+1 (555) 000-0000',
-        address: item.address || 'School Bus Route Stop',
-        term1Fee: t1,
-        term2Fee: t2,
-        paidAmount: 0,
-        pendingAmount: t1 + t2,
-        status: 'pending',
+    try {
+      const payload = {
+        ...data,
+        parentPhone: `+91 ${coreDigits}`,
+        academicYear: data.academicYear || selectedAcademicYear
       };
-      newArr.unshift(st);
-      count++;
-    });
+      await api.post('/api/students', payload);
+      addToast('Student Added', 'success', `${data.name} enrolled successfully.`);
+      await refreshAllData();
+      return { success: true };
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to enroll student';
+      addToast('Registration Error', 'error', errMsg);
+      return { success: false, error: errMsg };
+    }
+  };
 
-    setStudents(newArr);
-    addAuditLog('BULK_IMPORT', 'Students', `Imported ${count} students. Skipped ${duplicates} duplicates.`);
-    addToast('Import Complete', 'success', `Added ${count} students successfully. Skipped ${duplicates} duplicates.`);
-    return { success: true, count, duplicates };
+  const updateStudent = async (id: string, data: Partial<Student>) => {
+    if (data.parentPhone) {
+      const digits = data.parentPhone.replace(/\D/g, '');
+      const coreDigits = digits.length >= 10 ? digits.slice(-10) : digits;
+      if (coreDigits.length !== 10) {
+        addToast('Validation Error', 'error', 'Parent Phone Number must be exactly 10 digits!');
+        return { success: false, error: 'Phone must be exactly 10 digits.' };
+      }
+      data.parentPhone = `+91 ${coreDigits}`;
+    }
+
+    try {
+      const res = await api.put(`/api/students/${id}`, data);
+      addToast('Student Updated', 'success', 'Changes saved successfully to database');
+      
+      // If updating current logged in student
+      if (currentUser?.id === id || currentUser?.studentId === id) {
+        setCurrentUser((prev: any) => ({ ...prev, ...res.data.student }));
+      }
+      await refreshAllData();
+      return { success: true };
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to update student';
+      addToast('Update Error', 'error', errMsg);
+      return { success: false, error: errMsg };
+    }
+  };
+
+  const deleteStudent = async (id: string) => {
+    try {
+      await api.delete(`/api/students/${id}`);
+      addToast('Student Removed', 'info', 'Deleted student profile from database.');
+      await refreshAllData();
+      return { success: true };
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to delete student';
+      addToast('Deletion Blocked', 'error', errMsg);
+      return { success: false, error: errMsg };
+    }
+  };
+
+  const bulkImportStudents = async (imported: Array<Partial<Student>>) => {
+    try {
+      const res = await api.post('/api/students/bulk-import', { students: imported });
+      addToast('Import Complete', 'success', `Enrolled ${res.data.count} students. skipped duplicate values.`);
+      await refreshAllData();
+      return { success: true, count: res.data.count, duplicates: imported.length - res.data.count };
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Bulk registration failed';
+      addToast('Import Failed', 'error', errMsg);
+      return { success: false, count: 0, duplicates: imported.length };
+    }
   };
 
   // CRUD Payments
-  const recordPayment = (
+  const recordPayment = async (
     studentId: string, 
     amount: number, 
     term: 'term1' | 'term2' | 'both', 
     method: PaymentRecord['method']
   ) => {
     if (amount <= 0) {
-      addToast('Invalid Amount', 'error', 'Payment amount must be greater than $0.');
-      return { success: false, error: 'Negative or zero amount' };
+      addToast('Invalid Amount', 'error', 'Payment amount must be greater than 0.');
+      return { success: false, error: 'Negative amount' };
     }
 
-    const st = students.find(s => s.studentId === studentId || s.id === studentId);
-    if (!st) {
-      addToast('Student Error', 'error', 'Student record not found.');
-      return { success: false, error: 'Student not found' };
+    try {
+      const res = await api.post('/api/payments', { studentId, amount, term, method });
+      addToast('Payment Successful!', 'success', `Recorded payment receipt of ${settings.currency}${amount}`);
+      await refreshAllData();
+      return { success: true, receipt: res.data.receipt };
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Collection transaction failed';
+      addToast('Payment Error', 'error', errMsg);
+      return { success: false, error: errMsg };
     }
-
-    if (st.status === 'paid' && st.pendingAmount <= 0) {
-      addToast('Already Paid', 'warning', 'This student has already settled all bus fee dues.');
-      return { success: false, error: 'Fee already paid' };
-    }
-
-    const receiptNum = `RCP-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-    const newPay: PaymentRecord = {
-      id: 'pay-' + Date.now(),
-      receiptNumber: receiptNum,
-      studentId: st.studentId,
-      studentName: st.name,
-      classSection: `${st.class} - ${st.section}`,
-      amount,
-      term,
-      paymentDate: new Date().toISOString(),
-      method,
-      status: 'completed',
-      remarks: `Paid via ${method} (${term.toUpperCase()})`,
-    };
-
-    setPayments(prev => [newPay, ...prev]);
-    fetch('/api/payments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId: st.studentId, amount, term, method }) }).catch(() => {});
-
-    // Update student balances
-    const newPaid = st.paidAmount + amount;
-    const totalFee = st.term1Fee + st.term2Fee;
-    const newPending = Math.max(0, totalFee - newPaid);
-    let newStatus: Role | PaymentStatus = 'pending';
-    if (newPaid >= totalFee) newStatus = 'paid';
-    else if (newPaid > 0) newStatus = 'partial';
-
-    updateStudent(st.id, {
-      paidAmount: newPaid,
-      pendingAmount: newPending,
-      status: newStatus as PaymentStatus,
-    });
-
-    addAuditLog('PAYMENT_RECEIVED', 'Finance', `Collected ${settings.currency}${amount} from ${st.name} (${receiptNum})`);
-    addToast('Payment Successful!', 'success', `Receipt ${receiptNum} generated for ${settings.currency}${amount}`);
-    return { success: true, receipt: newPay };
   };
 
-  const markAsPaidAdmin = (
+  const markAsPaidAdmin = async (
     studentId: string, 
     term: 'term1' | 'term2' | 'both', 
     method: PaymentRecord['method'], 
     remarks?: string
   ) => {
-    const st = students.find(s => s.studentId === studentId || s.id === studentId);
-    if (!st) return { success: false, error: 'Student not found' };
-
-    let amtToPay = st.pendingAmount;
-    if (term === 'term1') amtToPay = Math.min(st.term1Fee, st.pendingAmount);
-    if (term === 'term2') amtToPay = Math.min(st.term2Fee, st.pendingAmount);
-    if (amtToPay <= 0) amtToPay = st.pendingAmount || 500;
-
-    const res = recordPayment(st.studentId, amtToPay, term, method);
-    if (res.success && res.receipt && remarks) {
-      setPayments(prev => prev.map(p => p.id === res.receipt!.id ? { ...p, remarks } : p));
+    try {
+      await api.post('/api/payments/mark-paid', { studentId, term, method, remarks });
+      addToast('Administrative Override', 'success', 'Student fee status set to Paid.');
+      await refreshAllData();
+      return { success: true };
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Override action failed';
+      addToast('Action Failed', 'error', errMsg);
+      return { success: false, error: errMsg };
     }
-    return res;
   };
 
   // CRUD Buses
-  const addBus = (data: Omit<Bus, 'id'>) => {
-    if (buses.some(b => b.busNumber.toLowerCase() === data.busNumber.toLowerCase())) {
-      addToast('Duplicate Bus Number', 'error', `Bus ${data.busNumber} already registered.`);
-      return { success: false, error: 'Duplicate Bus' };
+  const addBus = async (data: Omit<Bus, 'id'>) => {
+    // Phone validation: extract core 10 digits
+    const digits = (data.driverPhone || '').replace(/\D/g, '');
+    const coreDigits = digits.length >= 10 ? digits.slice(-10) : digits;
+    if (coreDigits.length !== 10) {
+      addToast('Validation Error', 'error', 'Driver Phone Number must be exactly 10 digits!');
+      return { success: false, error: 'Driver phone must be 10 digits' };
     }
-    const newBus: Bus = { ...data, id: 'b-' + Date.now() };
-    setBuses(prev => [...prev, newBus]);
-    addAuditLog('ADD_BUS', 'Fleet', `Added bus ${newBus.busNumber} (${newBus.driverName})`);
-    addToast('Bus Added', 'success', `Registered ${newBus.busNumber} successfully`);
-    return { success: true };
+
+    // Reg number
+    const regNo = (data.registrationNumber || '').trim();
+    if (regNo.length < 5) {
+      addToast('Validation Error', 'error', 'Registration Number must be at least 5 characters!');
+      return { success: false, error: 'Reg number invalid' };
+    }
+
+    // AM only
+    if (!(data.startingTime || '').toUpperCase().endsWith('AM')) {
+      addToast('Validation Error', 'error', 'Starting Time must be fixed to AM (morning) only!');
+      return { success: false, error: 'Starting time must end with AM' };
+    }
+
+    try {
+      await api.post('/api/fleet/buses', { ...data, driverPhone: `+91 ${coreDigits}`, registrationNumber: regNo });
+      addToast('Bus Added', 'success', `Registered bus ${data.busNumber}`);
+      await refreshAllData();
+      return { success: true };
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to add bus';
+      addToast('Error', 'error', errMsg);
+      return { success: false, error: errMsg };
+    }
   };
 
-  const updateBus = (id: string, data: Partial<Bus>) => {
-    setBuses(prev => prev.map(b => b.id === id ? { ...b, ...data } : b));
-    addToast('Bus Updated', 'success', 'Fleet details saved');
+  const updateBus = async (id: string, data: Partial<Bus>) => {
+    if (data.driverPhone) {
+      const digits = data.driverPhone.replace(/\D/g, '');
+      const coreDigits = digits.length >= 10 ? digits.slice(-10) : digits;
+      if (coreDigits.length !== 10) {
+        addToast('Validation Error', 'error', 'Driver Phone Number must be exactly 10 digits!');
+        return;
+      }
+      data.driverPhone = `+91 ${coreDigits}`;
+    }
+
+    if (data.registrationNumber) {
+      const regNo = data.registrationNumber.trim();
+      if (regNo.length < 5) {
+        addToast('Validation Error', 'error', 'Registration Number must be at least 5 characters!');
+        return;
+      }
+      data.registrationNumber = regNo;
+    }
+
+    if (data.startingTime) {
+      if (!data.startingTime.toUpperCase().endsWith('AM')) {
+        addToast('Validation Error', 'error', 'Starting Time must be fixed to AM (morning) only!');
+        return;
+      }
+    }
+
+    try {
+      await api.put(`/api/fleet/buses/${id}`, data);
+      addToast('Bus Updated', 'success', 'Fleet updates successfully saved to database.');
+      await refreshAllData();
+    } catch (err: any) {
+      addToast('Update Failed', 'error', err.response?.data?.error || 'Failed to update bus details');
+    }
   };
 
-  const deleteBus = (id: string) => {
-    const target = buses.find(b => b.id === id);
-    if (!target) return { success: false };
-
-    // Edge case check: Delete Bus with Route
+  const deleteBus = async (id: string) => {
+    // Verification check: Bus must not have students assigned
     const assignedStudents = students.filter(s => s.busId === id);
     if (assignedStudents.length > 0) {
-      addToast('Cannot Delete Active Bus', 'error', `Bus ${target.busNumber} has ${assignedStudents.length} students assigned! Reassign them first.`);
+      addToast('Cannot Delete Bus', 'error', `Bus has ${assignedStudents.length} students assigned! Reassign them first.`);
       return { success: false, error: 'Students assigned to bus' };
     }
 
-    setBuses(prev => prev.filter(b => b.id !== id));
-    addAuditLog('DELETE_BUS', 'Fleet', `Deleted bus ${target.busNumber}`);
-    addToast('Bus Removed', 'info', `Deleted ${target.busNumber}`);
-    return { success: true };
+    try {
+      await api.delete(`/api/fleet/buses/${id}`);
+      addToast('Bus Removed', 'info', 'Bus details deleted from directory.');
+      await refreshAllData();
+      return { success: true };
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to delete bus';
+      addToast('Deletion Failed', 'error', errMsg);
+      return { success: false, error: errMsg };
+    }
   };
 
   // CRUD Routes
-  const addRoute = (data: Omit<Route, 'id'>) => {
-    if (routes.some(r => r.name.toLowerCase() === data.name.toLowerCase())) {
-      addToast('Duplicate Route Name', 'error', `Route "${data.name}" already exists.`);
-      return { success: false, error: 'Duplicate Route' };
+  const addRoute = async (data: Omit<Route, 'id'>) => {
+    try {
+      await api.post('/api/fleet/routes', data);
+      addToast('Route Created', 'success', `${data.name} successfully saved to cloud.`);
+      await refreshAllData();
+      return { success: true };
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to create route';
+      addToast('Route Creation Error', 'error', errMsg);
+      return { success: false, error: errMsg };
     }
-    const newRoute: Route = { ...data, id: 'r-' + Date.now() };
-    setRoutes(prev => [...prev, newRoute]);
-    addAuditLog('ADD_ROUTE', 'Routes', `Added route ${newRoute.name}`);
-    addToast('Route Created', 'success', `${newRoute.name} added to grid`);
-    return { success: true };
   };
 
-  const updateRoute = (id: string, data: Partial<Route>) => {
-    setRoutes(prev => prev.map(r => r.id === id ? { ...r, ...data } : r));
-    addToast('Route Saved', 'success', 'Route details updated');
+  const updateRoute = async (id: string, data: Partial<Route>) => {
+    try {
+      await api.put(`/api/fleet/routes/${id}`, data);
+      addToast('Route Saved', 'success', 'Route details synced to database.');
+      await refreshAllData();
+    } catch (err: any) {
+      addToast('Update Failed', 'error', err.response?.data?.error || 'Failed to save route details');
+    }
   };
 
-  const deleteRoute = (id: string) => {
-    const target = routes.find(r => r.id === id);
-    if (!target) return { success: false };
-
-    // Edge case: Delete Route with Students
-    const stuCount = students.filter(s => s.routeId === id).length;
-    if (stuCount > 0) {
-      addToast('Cannot Delete Route', 'error', `Route "${target.name}" has ${stuCount} students assigned!`);
-      return { success: false, error: 'Route has students' };
+  const deleteRoute = async (id: string) => {
+    // Verification check: Route must not have students assigned
+    const assignedStudents = students.filter(s => s.routeId === id);
+    if (assignedStudents.length > 0) {
+      addToast('Cannot Delete Route', 'error', `Route has ${assignedStudents.length} students assigned! Reassign them first.`);
+      return { success: false, error: 'Students assigned to route' };
     }
 
-    setRoutes(prev => prev.filter(r => r.id !== id));
-    setStops(prev => prev.filter(s => s.routeId !== id));
-    addAuditLog('DELETE_ROUTE', 'Routes', `Deleted route ${target.name}`);
-    addToast('Route Deleted', 'info', `Removed ${target.name}`);
-    return { success: true };
+    try {
+      await api.delete(`/api/fleet/routes/${id}`);
+      addToast('Route Deleted', 'info', 'Removed route from directory.');
+      await refreshAllData();
+      return { success: true };
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to delete route';
+      addToast('Deletion Failed', 'error', errMsg);
+      return { success: false, error: errMsg };
+    }
   };
 
   // CRUD Stops
-  const addStop = (data: Omit<Stop, 'id'>) => {
-    const newStop: Stop = { ...data, id: 's-' + Date.now() };
-    setStops(prev => [...prev, newStop]);
-    addToast('Stop Added', 'success', `${newStop.stopName} added`);
+  const addStop = async (data: Omit<Stop, 'id'>) => {
+    if (!(data.pickupTime || '').toUpperCase().endsWith('AM')) {
+      addToast('Validation Error', 'error', 'Pickup Time must end with AM only!');
+      return;
+    }
+    try {
+      await api.post('/api/fleet/stops', data);
+      addToast('Stop Registered', 'success', `Stop "${data.stopName}" added.`);
+      await refreshAllData();
+    } catch (err: any) {
+      addToast('Failed', 'error', err.response?.data?.error || 'Could not save stop details');
+    }
   };
 
-  const updateStop = (id: string, data: Partial<Stop>) => {
-    setStops(prev => prev.map(s => s.id === id ? { ...s, ...data } : s));
-    addToast('Stop Updated', 'success', 'Stop details saved');
+  const updateStop = async (id: string, data: Partial<Stop>) => {
+    if (data.pickupTime) {
+      if (!data.pickupTime.toUpperCase().endsWith('AM')) {
+        addToast('Validation Error', 'error', 'Pickup Time must end with AM only!');
+        return;
+      }
+    }
+    try {
+      await api.put(`/api/fleet/stops/${id}`, data);
+      addToast('Stop Saved', 'success', 'Transit stop details updated.');
+      await refreshAllData();
+    } catch (err: any) {
+      addToast('Failed', 'error', err.response?.data?.error || 'Could not save stop details');
+    }
   };
 
-  const deleteStop = (id: string) => {
-    setStops(prev => prev.filter(s => s.id !== id));
-    addToast('Stop Removed', 'info', 'Stop deleted');
+  const deleteStop = async (id: string) => {
+    try {
+      await api.delete(`/api/fleet/stops/${id}`);
+      addToast('Stop Deleted', 'info', 'Removed stop location.');
+      await refreshAllData();
+    } catch (err: any) {
+      addToast('Failed', 'error', err.response?.data?.error || 'Could not delete stop');
+    }
   };
 
-  const reorderStops = (routeId: string, orderedStopIds: string[]) => {
-    setStops(prev => prev.map(s => {
-      if (s.routeId !== routeId) return s;
-      const idx = orderedStopIds.indexOf(s.id);
-      return idx !== -1 ? { ...s, order: idx + 1 } : s;
-    }));
-    addToast('Stops Reordered', 'success', 'New pickup sequence saved');
+  const reorderStops = async (routeId: string, orderedStopIds: string[]) => {
+    try {
+      await api.post('/api/fleet/stops/reorder', { routeId, orderedStopIds });
+      addToast('Pickup Sequence Saved', 'success', 'Reordered sequence correctly.');
+      await refreshAllData();
+    } catch (err: any) {
+      addToast('Failed', 'error', err.response?.data?.error || 'Could not save sequence');
+    }
   };
 
-  // Settings & Reset
-  const updateSettings = (newSet: Partial<SchoolSettings>) => {
-    setSettings(prev => ({ ...prev, ...newSet }));
-    addAuditLog('UPDATE_SETTINGS', 'Settings', 'Updated school configuration settings');
-    addToast('Settings Saved', 'success', 'System preferences updated');
+  // Settings
+  const updateSettings = async (newSet: Partial<SchoolSettings>) => {
+    try {
+      await api.put('/api/settings', newSet);
+      addToast('Settings Saved', 'success', 'Portal configurations updated.');
+      await refreshAllData();
+    } catch (err: any) {
+      addToast('Failed', 'error', err.response?.data?.error || 'Could not save settings');
+    }
   };
 
-  const resetToSeedData = () => {
-    setStudents(initialStudents);
-    setBuses(initialBuses);
-    setRoutes(initialRoutes);
-    setStops(initialStops);
-    setPayments(initialPayments);
-    setSettings(initialSettings);
-    setAuditLogs(initialAuditLogs);
-    addToast('Demo Reset', 'info', 'Restored original seed database');
+  const resetToSeedData = async () => {
+    try {
+      await api.post('/api/settings/reset');
+      addToast('Reset Complete', 'success', 'System restored successfully to factory seed dataset.');
+      await refreshAllData();
+    } catch (err: any) {
+      addToast('Reset Failed', 'error', err.response?.data?.error || 'Database reset failed.');
+    }
   };
+
+  const enrichedCurrentUser = useMemo(() => {
+    if (currentUser && currentUser.role === 'student') {
+      const fullStudent = students.find(
+        s => s.studentId === currentUser.studentId || s.id === currentUser.id
+      );
+      if (fullStudent) {
+        return {
+          ...currentUser,
+          ...fullStudent
+        };
+      }
+    }
+    return currentUser;
+  }, [currentUser, students]);
 
   return (
     <AppContext.Provider value={{
-      currentRole, currentUser, splashCompleted, setSplashCompleted,
+      currentRole, currentUser: enrichedCurrentUser, splashCompleted, setSplashCompleted,
       rememberMe, setRememberMe, login, logout, switchDemoRole,
       darkMode, toggleDarkMode, adminTab, setAdminTab, studentTab, setStudentTab,
       toasts, addToast, removeToast,
-      students, buses, routes, stops, payments, settings, auditLogs,
+      students: filteredStudents, buses, routes, stops, payments: filteredPayments, settings, auditLogs,
       addStudent, updateStudent, deleteStudent, bulkImportStudents,
       recordPayment, markAsPaidAdmin,
       addBus, updateBus, deleteBus,
       addRoute, updateRoute, deleteRoute,
       addStop, updateStop, deleteStop, reorderStops,
-      updateSettings, resetToSeedData, addAuditLog
+      updateSettings, resetToSeedData, addAuditLog,
+      selectedAcademicYear, setSelectedAcademicYear
     }}>
       {children}
     </AppContext.Provider>

@@ -7,7 +7,7 @@ export const initialRoutes: Route[] = [
     description: 'Covers Green Meadows, Hill View, and Sunrise Park',
     assignedBusId: 'b-1',
     assignedDriverName: 'Rajesh Kumar',
-    assignedDriverPhone: '+1 (555) 234-5678',
+    assignedDriverPhone: '+91 98765 43210',
   },
   {
     id: 'r-2',
@@ -15,7 +15,7 @@ export const initialRoutes: Route[] = [
     description: 'Covers Ocean Drive, Marina Boulevard, and Harbor Point',
     assignedBusId: 'b-2',
     assignedDriverName: 'Marcus Vance',
-    assignedDriverPhone: '+1 (555) 876-5432',
+    assignedDriverPhone: '+91 88776 65544',
   },
   {
     id: 'r-3',
@@ -23,7 +23,7 @@ export const initialRoutes: Route[] = [
     description: 'Covers Silicon Avenue, Innovation Park, and Metro Station',
     assignedBusId: 'b-3',
     assignedDriverName: 'David Miller',
-    assignedDriverPhone: '+1 (555) 345-6789',
+    assignedDriverPhone: '+91 77665 54433',
   },
   {
     id: 'r-4',
@@ -31,7 +31,7 @@ export const initialRoutes: Route[] = [
     description: 'Covers Oakwood Heights, Maple Valley, and Pine Rest',
     assignedBusId: 'b-4',
     assignedDriverName: 'Samuel Jackson',
-    assignedDriverPhone: '+1 (555) 987-6543',
+    assignedDriverPhone: '+91 99887 76655',
   },
 ];
 
@@ -39,42 +39,54 @@ export const initialBuses: Bus[] = [
   {
     id: 'b-1',
     busNumber: 'BUS-101',
-    registrationNumber: 'KA-01-EQ-4421',
+    registrationNumber: 'TN-20-AB-1234',
     capacity: 35,
     driverName: 'Rajesh Kumar',
-    driverPhone: '+1 (555) 234-5678',
+    driverPhone: '+91 98765 43210',
     routeId: 'r-1',
     status: 'active',
+    startingLocation: 'Kundrathur',
+    startingTime: '06:30 AM',
+    destination: 'School Campus',
   },
   {
     id: 'b-2',
     busNumber: 'BUS-102',
-    registrationNumber: 'KA-01-EQ-8812',
+    registrationNumber: 'TN-20-CD-5678',
     capacity: 40,
     driverName: 'Marcus Vance',
-    driverPhone: '+1 (555) 876-5432',
+    driverPhone: '+91 88776 65544',
     routeId: 'r-2',
     status: 'active',
+    startingLocation: 'Porur',
+    startingTime: '06:45 AM',
+    destination: 'School Campus',
   },
   {
     id: 'b-3',
     busNumber: 'BUS-103',
-    registrationNumber: 'KA-05-AB-1092',
+    registrationNumber: 'TN-10-EF-9090',
     capacity: 30,
     driverName: 'David Miller',
-    driverPhone: '+1 (555) 345-6789',
+    driverPhone: '+91 77665 54433',
     routeId: 'r-3',
     status: 'active',
+    startingLocation: 'Guindy',
+    startingTime: '07:00 AM',
+    destination: 'School Campus',
   },
   {
     id: 'b-4',
     busNumber: 'BUS-104',
-    registrationNumber: 'KA-03-HJ-9941',
+    registrationNumber: 'TN-30-GH-1122',
     capacity: 35,
     driverName: 'Samuel Jackson',
-    driverPhone: '+1 (555) 987-6543',
+    driverPhone: '+91 99887 76655',
     routeId: 'r-4',
     status: 'active',
+    startingLocation: 'Velachery',
+    startingTime: '07:15 AM',
+    destination: 'School Campus',
   },
 ];
 
@@ -102,7 +114,7 @@ export const initialStops: Stop[] = [
 export const initialStudents: Student[] = [
   {
     id: 'stu-1',
-    studentId: 'STU1001',
+    studentId: 'ST-10-1001',
     admissionNumber: 'ADM-2024-001',
     name: 'Aarav Sharma',
     password: 'password123',
@@ -122,7 +134,7 @@ export const initialStudents: Student[] = [
   },
   {
     id: 'stu-2',
-    studentId: 'STU1002',
+    studentId: 'ST-9-1002',
     admissionNumber: 'ADM-2024-002',
     name: 'Diya Patel',
     password: 'password123',
@@ -142,7 +154,7 @@ export const initialStudents: Student[] = [
   },
   {
     id: 'stu-3',
-    studentId: 'STU1003',
+    studentId: 'ST-10-1003',
     admissionNumber: 'ADM-2024-003',
     name: 'Liam O’Connor',
     password: 'password123',
@@ -162,7 +174,7 @@ export const initialStudents: Student[] = [
   },
   {
     id: 'stu-4',
-    studentId: 'STU1004',
+    studentId: 'ST-8-1004',
     admissionNumber: 'ADM-2024-004',
     name: 'Sophia Chen',
     password: 'password123',
@@ -182,7 +194,7 @@ export const initialStudents: Student[] = [
   },
   {
     id: 'stu-5',
-    studentId: 'STU1005',
+    studentId: 'ST-7-1005',
     admissionNumber: 'ADM-2024-005',
     name: 'Noah Williams',
     password: 'password123',
@@ -202,7 +214,7 @@ export const initialStudents: Student[] = [
   },
   {
     id: 'stu-6',
-    studentId: 'STU1006',
+    studentId: 'ST-6-1006',
     admissionNumber: 'ADM-2024-006',
     name: 'Emma Watson',
     password: 'password123',
@@ -222,7 +234,7 @@ export const initialStudents: Student[] = [
   },
   {
     id: 'stu-7',
-    studentId: 'STU1007',
+    studentId: 'ST-10-1007',
     admissionNumber: 'ADM-2024-007',
     name: 'Kabir Verma',
     password: 'password123',
@@ -242,7 +254,7 @@ export const initialStudents: Student[] = [
   },
   {
     id: 'stu-8',
-    studentId: 'STU1008',
+    studentId: 'ST-9-1008',
     admissionNumber: 'ADM-2024-008',
     name: 'Zoe Martinez',
     password: 'password123',
@@ -262,7 +274,7 @@ export const initialStudents: Student[] = [
   },
   {
     id: 'stu-9',
-    studentId: 'STU1009',
+    studentId: 'ST-5-1009',
     admissionNumber: 'ADM-2024-009',
     name: 'Ishaan Gupta',
     password: 'password123',
@@ -282,7 +294,7 @@ export const initialStudents: Student[] = [
   },
   {
     id: 'stu-10',
-    studentId: 'STU1010',
+    studentId: 'ST-10-1010',
     admissionNumber: 'ADM-2024-010',
     name: 'Ava Robinson',
     password: 'password123',
@@ -302,7 +314,7 @@ export const initialStudents: Student[] = [
   },
   {
     id: 'stu-11',
-    studentId: 'STU1011',
+    studentId: 'ST-8-1011',
     admissionNumber: 'ADM-2024-011',
     name: 'Lucas Kim',
     password: 'password123',
@@ -322,7 +334,7 @@ export const initialStudents: Student[] = [
   },
   {
     id: 'stu-12',
-    studentId: 'STU1012',
+    studentId: 'ST-6-1012',
     admissionNumber: 'ADM-2024-012',
     name: 'Mia Taylor',
     password: 'password123',
@@ -346,7 +358,7 @@ export const initialPayments: PaymentRecord[] = [
   {
     id: 'pay-1',
     receiptNumber: 'RCP-2026-8801',
-    studentId: 'STU1001',
+    studentId: 'ST-10-1001',
     studentName: 'Aarav Sharma',
     classSection: '10 - A',
     amount: 600,
@@ -359,7 +371,7 @@ export const initialPayments: PaymentRecord[] = [
   {
     id: 'pay-2',
     receiptNumber: 'RCP-2026-8802',
-    studentId: 'STU1002',
+    studentId: 'ST-9-1002',
     studentName: 'Diya Patel',
     classSection: '9 - B',
     amount: 1100,
@@ -372,7 +384,7 @@ export const initialPayments: PaymentRecord[] = [
   {
     id: 'pay-3',
     receiptNumber: 'RCP-2026-8803',
-    studentId: 'STU1004',
+    studentId: 'ST-8-1004',
     studentName: 'Sophia Chen',
     classSection: '8 - A',
     amount: 1300,
@@ -384,7 +396,7 @@ export const initialPayments: PaymentRecord[] = [
   {
     id: 'pay-4',
     receiptNumber: 'RCP-2026-8804',
-    studentId: 'STU1005',
+    studentId: 'ST-7-1005',
     studentName: 'Noah Williams',
     classSection: '7 - C',
     amount: 750,
@@ -397,7 +409,7 @@ export const initialPayments: PaymentRecord[] = [
   {
     id: 'pay-5',
     receiptNumber: 'RCP-2026-8805',
-    studentId: 'STU1007',
+    studentId: 'ST-10-1007',
     studentName: 'Kabir Verma',
     classSection: '10 - B',
     amount: 1100,
@@ -409,7 +421,7 @@ export const initialPayments: PaymentRecord[] = [
   {
     id: 'pay-6',
     receiptNumber: 'RCP-2026-8806',
-    studentId: 'STU1010',
+    studentId: 'ST-10-1010',
     studentName: 'Ava Robinson',
     classSection: '10 - C',
     amount: 1200,
@@ -424,8 +436,8 @@ export const initialSettings: SchoolSettings = {
   schoolName: 'St. Jude International Academy',
   academicYear: '2026 - 2027',
   logoUrl: 'https://images.unsplash.com/photo-1546410531-bb4caa6b424d?auto=format&fit=crop&w=120&q=80',
-  currency: '$',
-  supportPhone: '+1 (800) 555-BUS1',
+  currency: '₹',
+  supportPhone: '+91 98765 43210',
   supportEmail: 'transport@stjudeacademy.edu',
   term1DueDate: '2026-05-31',
   term2DueDate: '2026-10-31',

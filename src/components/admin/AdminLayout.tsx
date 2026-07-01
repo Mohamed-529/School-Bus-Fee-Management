@@ -14,7 +14,8 @@ interface AdminLayoutProps {
 export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const { 
     adminTab, setAdminTab, logout, darkMode, toggleDarkMode, 
-    currentUser, students, switchDemoRole, settings 
+    currentUser, students, switchDemoRole, settings,
+    selectedAcademicYear, setSelectedAcademicYear
   } = useApp();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [globalQuery, setGlobalQuery] = useState('');
@@ -28,7 +29,6 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     { id: 'payments', label: 'Fee Payments', icon: CreditCard },
     { id: 'pending', label: 'Pending Dues', icon: AlertCircle, badge: pendingCount },
     { id: 'buses', label: 'Fleet & Buses', icon: Bus },
-    { id: 'routes', label: 'Route Grid', icon: MapPin },
     { id: 'reports', label: 'Analytics & Reports', icon: FileSpreadsheet },
     { id: 'settings', label: 'School Settings', icon: Settings },
   ];
@@ -86,17 +86,11 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
           <div className="flex items-center justify-between">
             <button
               onClick={toggleDarkMode}
-              className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl text-slate-500 dark:text-slate-400 transition-colors flex items-center gap-1.5 text-xs font-medium"
+              className="w-full p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl text-slate-500 dark:text-slate-400 transition-colors flex items-center justify-center gap-1.5 text-xs font-medium"
               title="Toggle Dark Mode"
             >
               {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
               <span>{darkMode ? 'Light Mode' : 'Dark Mode'}</span>
-            </button>
-            <button
-              onClick={() => switchDemoRole('student')}
-              className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
-            >
-              Simulate Student
             </button>
           </div>
 
@@ -143,21 +137,18 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Search simulation */}
-            <div className="relative hidden md:block">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5" />
-              <input
-                type="text"
-                value={globalQuery}
-                onChange={(e) => {
-                  setGlobalQuery(e.target.value);
-                  if (e.target.value.trim().length > 1) {
-                    setAdminTab('students');
-                  }
-                }}
-                placeholder="Search Student ID, Route..."
-                className="pl-9 pr-4 py-2 bg-slate-100 dark:bg-slate-800 border-none rounded-full text-xs w-60 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
-              />
+            {/* Academic Year Selector */}
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200/40 dark:border-slate-700/50">
+              <span className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500">Session:</span>
+              <select
+                value={selectedAcademicYear}
+                onChange={(e) => setSelectedAcademicYear(e.target.value)}
+                className="bg-transparent border-none text-xs font-bold text-indigo-600 dark:text-indigo-400 focus:outline-hidden cursor-pointer p-0 select-none"
+              >
+                <option value="2024 - 2025" className="bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200">2024-25</option>
+                <option value="2025 - 2026" className="bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200">2025-26</option>
+                <option value="2026 - 2027" className="bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200">2026-27</option>
+              </select>
             </div>
 
             <button

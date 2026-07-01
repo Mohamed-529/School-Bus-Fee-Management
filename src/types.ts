@@ -7,6 +7,7 @@ export interface Student {
   studentId: string; // e.g. STU1001
   admissionNumber: string;
   name: string;
+  email?: string;
   password?: string;
   class: string;
   section: string;
@@ -22,6 +23,7 @@ export interface Student {
   pendingAmount: number;
   status: PaymentStatus;
   avatar?: string;
+  academicYear?: string;
 }
 
 export interface Bus {
@@ -32,7 +34,10 @@ export interface Bus {
   driverName: string;
   driverPhone: string;
   routeId: string;
-  status: 'active' | 'maintenance';
+  status: 'active' | 'inactive';
+  startingLocation: string;
+  startingTime: string;
+  destination: string;
 }
 
 export interface Route {
@@ -66,6 +71,7 @@ export interface PaymentRecord {
   method: 'Online Card' | 'UPI' | 'Net Banking' | 'Cash' | 'Cheque';
   status: 'completed' | 'failed' | 'refunded';
   remarks?: string;
+  academicYear?: string;
 }
 
 export interface SchoolSettings {

@@ -1,23 +1,42 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
-import { UploadCloud, FileSpreadsheet, CheckCircle2, AlertTriangle, ArrowRight, RefreshCw } from 'lucide-react';
+import { UploadCloud, FileSpreadsheet, CheckCircle2, AlertTriangle, ArrowRight, RefreshCw, Download } from 'lucide-react';
 
 export const BulkImportView: React.FC = () => {
-  const { bulkImportStudents, addToast, settings } = useApp();
+  const { bulkImportStudents, addToast, settings, routes, buses, stops, setAdminTab } = useApp();
   
-  const [rawText, setRawText] = useState(`STU2001, Rohan Gupta, 8, A, +15553344112, Green Meadows Gate 1, 600
-STU2002, Tanya Verma, 9, B, +15559988221, Hill View Junction, 550
-STU2003, Kabir Rao, 10, A, +15551122334, Ocean Drive Towers, 700
-STU1001, Aarav Sharma, 10, A, +15551112233, Duplicate Testing Gate, 600`);
+  const [rawText, setRawText] = useState(`StudentID,StudentName,Class,Section,ParentName,ParentPhone,Term1Fee,Term2Fee,RouteName,BusNumber,StopName
+ST-8-2001, Rohan Gupta, 8, A, Vijay Gupta, 9876543210, 600, 600, North City Express (Route A), BUS-101, Green Meadows Gate 1
+ST-9-2002, Tanya Verma, 9, B, Sanjay Verma, 8877665544, 550, 550, South Bay Corridor (Route B), BUS-102, Ocean Drive Towers
+ST-10-2003, Kabir Rao, 10, A, Mohan Rao, 7766554433, 700, 700, East Tech Hub (Route C), BUS-103, Silicon Avenue Gate 4
+ST-10-1001, Aarav Sharma, 10, A, Ramesh Sharma, 9988776655, 600, 600, West Suburbs (Route D), BUS-104, Oakwood Heights Clubhouse`);
 
   const [step, setStep] = useState<'upload' | 'preview' | 'result'>('upload');
   const [parsedRows, setParsedRows] = useState<Array<any>>([]);
   const [validationErrors, setValidationErrors] = useState<Array<string>>([]);
   const [importStats, setImportStats] = useState<{ count: number; duplicates: number } | null>(null);
 
-  const handleValidateAndPreview = () => {
-    const lines = rawText.trim().split('\n');
-    if (lines.length === 0 || !rawText.trim()) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      if (text) {
+        setRawText(text);
+        addToast('File Loaded Successfully', 'success', `Loaded "${file.name}"`);
+        validateAndPreviewText(text);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const validateAndPreviewText = (text: string) => {
+    const lines = text.trim().split('\n').filter(line => line.trim().length > 0);
+    if (lines.length === 0) {
       addToast('Empty Input', 'warning', 'Please provide Excel/CSV data or use sample text');
       return;
     }
@@ -25,50 +44,231 @@ STU1001, Aarav Sharma, 10, A, +15551112233, Duplicate Testing Gate, 600`);
     const rows: any[] = [];
     const errs: string[] = [];
 
-    lines.forEach((line, idx) => {
-      const parts = line.split(',').map(s => s.trim());
-      if (parts.length < 3) {
-        errs.push(`Row ${idx + 1}: Missing required columns (Expected at least ID, Name, Class)`);
-        return;
-      }
-      rows.push({
-        studentId: parts[0],
-        name: parts[1],
-        class: parts[2] || '5',
-        section: parts[3] || 'A',
-        parentPhone: parts[4] || '+1 (555) 000-0000',
-        address: parts[5] || 'School Bus Route Stop',
-        term1Fee: Number(parts[6]) || 600,
-        term2Fee: Number(parts[6]) || 600,
+    // Detect if first row is a header
+    let hasHeader = false;
+    let idIdx = 0;
+    let nameIdx = 1;
+    let classIdx = 2;
+    let sectionIdx = 3;
+    let parentNameIdx = 4;
+    let phoneIdx = 5;
+    let term1Idx = 6;
+    let term2Idx = 7;
+    let routeIdx = 8;
+    let busIdx = 9;
+    let stopIdx = 10;
+
+    const firstLine = lines[0].toLowerCase();
+    const firstLineParts = lines[0].split(',').map(s => s.trim().toLowerCase());
+
+    // If first line contains common keywords, treat it as header row
+    if (
+      firstLineParts.some(h => 
+        h.includes('id') || 
+        h.includes('name') || 
+        h.includes('class') || 
+        h.includes('std') || 
+        h.includes('section') || 
+        h.includes('parent') || 
+        h.includes('phone') || 
+        h.includes('number') || 
+        h.includes('term') || 
+        h.includes('route') || 
+        h.includes('bus') || 
+        h.includes('stop') || 
+        h.includes('pickup')
+      )
+    ) {
+      hasHeader = true;
+      firstLineParts.forEach((h, idx) => {
+        if (h.includes('id') || h.includes('student')) idIdx = idx;
+        else if (h.includes('studentname') || h === 'name' || h.includes('student name')) nameIdx = idx;
+        else if (h.includes('class') || h === 'std' || h.includes('grade')) classIdx = idx;
+        else if (h.includes('section') || h === 'sec') sectionIdx = idx;
+        else if (h.includes('parentname') || h === 'parent' || h.includes('parent name') || h.includes('guardian')) parentNameIdx = idx;
+        else if (h.includes('parentphone') || h === 'number' || h.includes('phone') || h.includes('whatsapp') || h.includes('parent phone')) phoneIdx = idx;
+        else if (h.includes('term1') || h === 'term1fee' || h.includes('term 1')) term1Idx = idx;
+        else if (h.includes('term2') || h === 'term2fee' || h.includes('term 2')) term2Idx = idx;
+        else if (h.includes('route') || h === 'routes' || h.includes('routename') || h.includes('route name')) routeIdx = idx;
+        else if (h.includes('bus') || h.includes('busnumber') || h.includes('bus number') || h === 'bus no') busIdx = idx;
+        else if (h.includes('stop') || h.includes('pickup') || h.includes('point') || h.includes('stop name') || h.includes('stopname')) stopIdx = idx;
       });
-    });
+    }
+
+    const startIdx = hasHeader ? 1 : 0;
+
+    for (let i = startIdx; i < lines.length; i++) {
+      const line = lines[i];
+      const parts = line.split(',').map(s => s.trim());
+      
+      // Extract values based on indices or standard fallback
+      const studentId = hasHeader ? (parts[idIdx] || '') : (parts[0] || '');
+      const name = hasHeader ? (parts[nameIdx] || '') : (parts[1] || '');
+      const classVal = hasHeader ? (parts[classIdx] || '10') : (parts[2] || '10');
+      const sectionVal = hasHeader ? (parts[sectionIdx] || 'A') : (parts[3] || 'A');
+      const parentName = hasHeader ? (parts[parentNameIdx] || '') : (parts[4] || '');
+      let phone = hasHeader ? (parts[phoneIdx] || '') : (parts[5] || '');
+      const term1FeeStr = hasHeader ? (parts[term1Idx] || '') : (parts[6] || '');
+      const term2FeeStr = hasHeader ? (parts[term2Idx] || '') : (parts[7] || '');
+      const routeName = hasHeader ? (parts[routeIdx] || '') : (parts[8] || '');
+      const busNumber = hasHeader ? (parts[busIdx] || '') : (parts[9] || '');
+      const stopName = hasHeader ? (parts[stopIdx] || '') : (parts[10] || '');
+
+      const rowNum = i + 1;
+
+      // Validate Student Name
+      if (!name) {
+        errs.push(`Row ${rowNum}: Student Name is required.`);
+      }
+
+      // Validate Class (std) & Section
+      if (!classVal) {
+        errs.push(`Row ${rowNum}: Class (std) is required.`);
+      }
+      if (!sectionVal) {
+        errs.push(`Row ${rowNum}: Section is required.`);
+      }
+
+      // Validate Parent Name
+      if (!parentName) {
+        errs.push(`Row ${rowNum}: Parent/Guardian Name is required.`);
+      }
+
+      // Validate Parent Phone (must be exactly 10 digits)
+      const digitsOnly = phone.replace(/\D/g, '');
+      const corePhone = digitsOnly.length >= 10 ? digitsOnly.slice(-10) : digitsOnly;
+      if (!phone || corePhone.length !== 10) {
+        errs.push(`Row ${rowNum}: Parent WhatsApp number '${phone}' is invalid. Must be exactly 10 digits.`);
+      }
+
+      // Validate Term 1 & Term 2 Fees
+      const term1Fee = term1FeeStr ? parseFloat(term1FeeStr) : 600;
+      const term2Fee = term2FeeStr ? parseFloat(term2FeeStr) : 600;
+
+      if (isNaN(term1Fee) || term1Fee < 0) {
+        errs.push(`Row ${rowNum}: Term 1 Fee must be a valid positive number.`);
+      }
+      if (isNaN(term2Fee) || term2Fee < 0) {
+        errs.push(`Row ${rowNum}: Term 2 Fee must be a valid positive number.`);
+      }
+
+      // Match Route, Bus, and Stop from Database
+      let matchedRoute = routes.find(r => 
+        r.name.toLowerCase().trim() === routeName.toLowerCase().trim() || 
+        r.name.toLowerCase().includes(routeName.toLowerCase())
+      );
+      
+      let matchedStop = stops.find(s => 
+        s.stopName.toLowerCase().trim() === stopName.toLowerCase().trim() || 
+        s.stopName.toLowerCase().includes(stopName.toLowerCase())
+      );
+
+      if (!matchedRoute && matchedStop) {
+        matchedRoute = routes.find(r => r.id === matchedStop.routeId);
+      }
+
+      if (!matchedRoute && routes.length > 0) {
+        matchedRoute = routes[0];
+      }
+
+      const routeId = matchedRoute ? matchedRoute.id : '';
+
+      let matchedBus = buses.find(b => 
+        b.busNumber.toLowerCase().trim() === busNumber.toLowerCase().trim() || 
+        b.busNumber.toLowerCase().includes(busNumber.toLowerCase())
+      );
+
+      if (!matchedBus && routeId) {
+        matchedBus = buses.find(b => b.routeId === routeId) || buses[0];
+      }
+
+      const busId = matchedBus ? matchedBus.id : '';
+
+      if (!matchedStop && routeId) {
+        matchedStop = stops.find(s => s.routeId === routeId) || stops[0];
+      }
+
+      const stopId = matchedStop ? matchedStop.id : '';
+
+      // Set Student ID (auto-generate if missing)
+      let finalStudentId = studentId.trim();
+      if (!finalStudentId) {
+        finalStudentId = `ST-${classVal}-${2000 + i + 1}`;
+      }
+
+      rows.push({
+        studentId: finalStudentId,
+        admissionNumber: `ADM-2026-${String(rowNum + 100).padStart(3, '0')}`,
+        name,
+        password: 'password123',
+        class: classVal,
+        section: sectionVal,
+        routeId,
+        busId,
+        stopId,
+        parentName: parentName || `Parent of ${name}`,
+        parentPhone: corePhone, // Send raw 10-digit number. Backend formats as +91
+        address: stopName || 'Assigned Stop',
+        term1Fee: term1Fee,
+        term2Fee: term2Fee,
+      });
+    }
 
     setParsedRows(rows);
     setValidationErrors(errs);
     setStep('preview');
   };
 
+  const handleValidateAndPreview = () => {
+    validateAndPreviewText(rawText);
+  };
+
   const handleExecuteImport = () => {
     const res = bulkImportStudents(parsedRows);
     if (res && res.success) {
       setImportStats({ count: res.count, duplicates: res.duplicates });
+      addToast('Import Completed', 'success', `Successfully loaded ${res.count} records. Redirecting to Student Directory...`);
       setStep('result');
+      // Navigate to file folder / student directory tab immediately
+      setTimeout(() => {
+        setAdminTab('students');
+      }, 1500);
     }
   };
 
+  const downloadSampleCSV = () => {
+    const csvContent = `StudentID,StudentName,Class,Section,ParentName,ParentPhone,Term1Fee,Term2Fee,RouteName,BusNumber,StopName
+ST-8-2001,Rohan Gupta,8,A,Vijay Gupta,9876543210,600,600,North City Express (Route A),BUS-101,Green Meadows Gate 1
+ST-9-2002,Tanya Verma,9,B,Sanjay Verma,8877665544,550,550,South Bay Corridor (Route B),BUS-102,Ocean Drive Towers
+ST-10-2003,Kabir Rao,10,A,Mohan Rao,7766554433,700,700,East Tech Hub (Route C),BUS-103,Silicon Avenue Gate 4
+ST-10-1001,Aarav Sharma,10,A,Ramesh Sharma,9988776655,600,600,West Suburbs (Route D),BUS-104,Oakwood Heights Clubhouse`;
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'school_bus_import_template.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    addToast('Template Downloaded', 'success', 'Downloaded school_bus_import_template.csv successfully');
+  };
+
   const loadSampleExcelTemplate = () => {
-    setRawText(`STU3001, Maya Lin, 6, A, +15556677881, Innovation Park Plaza, 700
-STU3002, Ethan Hunt, 7, B, +15553322119, Metro Station North, 650
-STU3003, Chloe Bennett, 10, C, +15554433228, Harbor Point Gate, 600
-STU3004, Liam Smith, 5, A, +15558877665, Sunrise Park Circle, 500`);
-    addToast('Sample Template Loaded', 'info', 'Loaded 4 valid Excel rows');
+    setRawText(`StudentID,StudentName,Class,Section,ParentName,ParentPhone,Term1Fee,Term2Fee,RouteName,BusNumber,StopName
+ST-6-3001, Maya Lin, 6, A, William Lin, 9001122334, 700, 700, North City Express (Route A), BUS-101, Green Meadows Gate 1
+ST-7-3002, Ethan Hunt, 7, B, Sarah Hunt, 9002233445, 650, 650, South Bay Corridor (Route B), BUS-102, Ocean Drive Towers
+ST-10-3003, Chloe Bennett, 10, C, Arthur Bennett, 9003344556, 600, 600, East Tech Hub (Route C), BUS-103, Silicon Avenue Gate 4
+ST-10-1001, Aarav Sharma, 10, A, Ramesh Sharma, 9988776655, 600, 600, West Suburbs (Route D), BUS-104, Oakwood Heights Clubhouse`);
+    addToast('Sample Template Loaded', 'info', 'Loaded 4 valid Excel rows with standard format');
   };
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-300">
       
       {/* Header card */}
-      <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center justify-between">
+      <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col md:flex-row gap-4 items-center justify-between">
         <div>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-300 text-xs font-semibold mb-2">
             <FileSpreadsheet className="w-3.5 h-3.5" /> Bulk Roster Upload
@@ -80,12 +280,21 @@ STU3004, Liam Smith, 5, A, +15558877665, Sunrise Park Circle, 500`);
             Upload exported CSV files or paste spreadsheet columns for automated validation and duplicate detection.
           </p>
         </div>
-        <button
-          onClick={loadSampleExcelTemplate}
-          className="hidden sm:flex text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline items-center gap-1.5 p-3 bg-slate-50 dark:bg-slate-800 rounded-2xl border"
-        >
-          Load Sample Data
-        </button>
+        <div className="flex gap-2 w-full md:w-auto justify-end">
+          <button
+            onClick={downloadSampleCSV}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer"
+            title="Download real template file"
+          >
+            <Download className="w-3.5 h-3.5" /> Download Template
+          </button>
+          <button
+            onClick={loadSampleExcelTemplate}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 border text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition-all cursor-pointer"
+          >
+            Load Sample Data
+          </button>
+        </div>
       </div>
 
       {/* Step Indicators */}
@@ -107,10 +316,20 @@ STU3004, Liam Smith, 5, A, +15558877665, Sunrise Park Circle, 500`);
       {/* Step 1: Upload / Paste Text */}
       {step === 'upload' && (
         <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-6">
-          <div className="border-2 border-dashed border-indigo-200 dark:border-indigo-900/60 rounded-2xl p-8 text-center bg-indigo-50/30 dark:bg-indigo-950/20 hover:bg-indigo-50/50 transition-colors cursor-pointer" onClick={loadSampleExcelTemplate}>
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            accept=".csv, .txt, .xlsx, .xls" 
+            className="hidden" 
+            onChange={handleFileChange} 
+          />
+          <div 
+            className="border-2 border-dashed border-indigo-200 dark:border-indigo-900/60 rounded-2xl p-8 text-center bg-indigo-50/30 dark:bg-indigo-950/20 hover:bg-indigo-50/50 transition-colors cursor-pointer animate-pulse" 
+            onClick={() => fileInputRef.current?.click()}
+          >
             <UploadCloud className="w-12 h-12 text-indigo-500 mx-auto mb-3" />
-            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">Click to Simulated File Browse or Paste Below</h3>
-            <p className="text-xs text-slate-400 mt-1">Supports standard CSV format: StudentID, Name, Class, Section, Phone, Address, TermFee</p>
+            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">Click to Browse Local Files or Paste Below</h3>
+            <p className="text-xs text-slate-400 mt-1">Supports standard CSV / Excel copy-paste format: StudentID, Name, Class, Section, Phone, Address, TermFee</p>
           </div>
 
           <div>
@@ -160,29 +379,50 @@ STU3004, Liam Smith, 5, A, +15558877665, Sunrise Park Circle, 500`);
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 dark:bg-slate-800 font-bold uppercase text-[10px] text-slate-400">
                 <tr>
-                  <th className="p-3.5">Student ID</th>
-                  <th className="p-3.5">Name</th>
+                  <th className="p-3.5">Student ID & Name</th>
                   <th className="p-3.5">Class/Sec</th>
-                  <th className="p-3.5">Parent WhatsApp</th>
-                  <th className="p-3.5">Fee Dues</th>
+                  <th className="p-3.5">Parent / Contact</th>
+                  <th className="p-3.5">Term 1 / 2 Fees</th>
+                  <th className="p-3.5">Matched Transit</th>
                   <th className="p-3.5">Status Check</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {parsedRows.map((row, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50">
-                    <td className="p-3.5 font-mono font-bold">{row.studentId}</td>
-                    <td className="p-3.5 font-semibold">{row.name}</td>
-                    <td className="p-3.5">{row.class}-{row.section}</td>
-                    <td className="p-3.5 font-mono text-emerald-600">{row.parentPhone}</td>
-                    <td className="p-3.5 font-mono">${row.term1Fee + row.term2Fee}</td>
-                    <td className="p-3.5">
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold">
-                        READY
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {parsedRows.map((row, idx) => {
+                  const rName = routes.find(r => r.id === row.routeId)?.name || 'Default Route';
+                  const bNum = buses.find(b => b.id === row.busId)?.busNumber || 'Default Bus';
+                  const sName = stops.find(s => s.id === row.stopId)?.stopName || 'Default Stop';
+                  return (
+                    <tr key={idx} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
+                      <td className="p-3.5">
+                        <div className="font-semibold text-slate-900 dark:text-white">{row.name}</div>
+                        <div className="font-mono text-[10px] text-slate-400 font-bold">{row.studentId}</div>
+                      </td>
+                      <td className="p-3.5 font-medium">{row.class} - {row.section}</td>
+                      <td className="p-3.5">
+                        <div className="font-medium text-slate-800 dark:text-slate-300">{row.parentName}</div>
+                        <div className="font-mono text-[10px] text-slate-500 font-bold">+{row.parentPhone}</div>
+                      </td>
+                      <td className="p-3.5 font-mono">
+                        <div className="font-semibold text-slate-700 dark:text-slate-300">Term 1: {settings.currency}{row.term1Fee}</div>
+                        <div className="text-[10px] text-slate-500">Term 2: {settings.currency}{row.term2Fee}</div>
+                      </td>
+                      <td className="p-3.5">
+                        <div className="font-semibold text-indigo-600 dark:text-indigo-400 truncate max-w-[150px]" title={rName}>{rName}</div>
+                        <div className="text-[10px] text-slate-500 flex items-center gap-1.5 mt-0.5">
+                          <span className="font-bold text-slate-600 dark:text-slate-400">{bNum}</span>
+                          <span className="text-slate-300">|</span>
+                          <span className="truncate max-w-[120px] font-medium" title={sName}>{sName}</span>
+                        </div>
+                      </td>
+                      <td className="p-3.5">
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-black">
+                          READY
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

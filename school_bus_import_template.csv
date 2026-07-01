@@ -1,0 +1,8 @@
+StudentID,StudentName,Class,Section,ParentPhone,StopName,TermFee
+ST-8-2001,Rohan Gupta,8,A,+919876543210,Gate 1,600
+ST-9-2002,Tanya Verma,9,B,+918877665544,Junction B,550
+ST-10-2003,Kabir Rao,10,A,+917766554433,Towers,700
+ST-10-1001,Aarav Sharma,10,A,+919988776655,Gate 2,600
+ST-6-3001,Maya Lin,6,A,+919001122334,Gate 1,700
+ST-7-3002,Ethan Hunt,7,B,+919002233445,Junction B,650
+ST-10-3003,Chloe Bennett,10,C,+919003344556,Towers,600

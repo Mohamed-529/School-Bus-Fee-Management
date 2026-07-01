@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 
 export const StudentManagementView: React.FC = () => {
-  const { students, routes, buses, stops, addStudent, updateStudent, deleteStudent, settings } = useApp();
+  const { students, routes, buses, stops, addStudent, updateStudent, deleteStudent, settings, addToast } = useApp();
   
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -26,6 +26,8 @@ export const StudentManagementView: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [detailStudent, setDetailStudent] = useState<Student | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -70,32 +72,65 @@ export const StudentManagementView: React.FC = () => {
     return filteredStudents.slice(start, start + itemsPerPage);
   }, [filteredStudents, currentPage]);
 
-  const uniqueClasses = Array.from(new Set(students.map(s => s.class))).sort((a,b) => Number(a)-Number(b));
+  const classOrder = ['LKG', 'UKG', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
+  const uniqueClasses = Array.from(new Set(students.map(s => s.class))).sort((a: any, b: any) => {
+    const strA = String(a).toUpperCase();
+    const strB = String(b).toUpperCase();
+    const idxA = classOrder.indexOf(strA);
+    const idxB = classOrder.indexOf(strB);
+    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+    if (idxA !== -1) return -1;
+    if (idxB !== -1) return 1;
+    return strA.localeCompare(strB);
+  });
   const uniqueSections = Array.from(new Set(students.map(s => s.section))).sort();
+
+  const CLASSES = ['LKG', 'UKG', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
+  const SECTIONS = ['A', 'B', 'C', 'D'];
+
+  const generateClassWiseId = (className: string) => {
+    const classStudents = students.filter(s => s.class === className);
+    const countInClass = classStudents.length;
+    const cleanClassName = className.replace(/\s+/g, '');
+    return `ST-${cleanClassName}-${String(1001 + countInClass)}`;
+  };
 
   const handleOpenAdd = () => {
     setEditingId(null);
+    setFormError(null);
+    setIsSaving(false);
+    const initialClass = '10';
+    const classWiseId = generateClassWiseId(initialClass);
+    const defaultRouteId = routes[0]?.id || '';
+    const matchingBuses = buses.filter(b => b.routeId === defaultRouteId);
+    const defaultBusId = matchingBuses[0]?.id || routes[0]?.assignedBusId || '';
+    const matchingStops = stops.filter(s => s.routeId === defaultRouteId);
+    const defaultStopId = matchingStops[0]?.id || '';
+    const defaultFee = matchingStops[0]?.feePerStop || 600;
+
     setFormData({
-      studentId: `STU${1000 + students.length + 1}`,
+      studentId: classWiseId,
       admissionNumber: `ADM-2026-${String(students.length + 1).padStart(3, '0')}`,
       name: '',
       password: 'password123',
-      class: '10',
+      class: initialClass,
       section: 'A',
-      routeId: routes[0]?.id || '',
-      busId: buses[0]?.id || '',
-      stopId: stops[0]?.id || '',
+      routeId: defaultRouteId,
+      busId: defaultBusId,
+      stopId: defaultStopId,
       parentName: '',
-      parentPhone: '+1 (555) ',
+      parentPhone: '+91 ',
       address: '',
-      term1Fee: 600,
-      term2Fee: 600,
+      term1Fee: defaultFee,
+      term2Fee: defaultFee,
     });
     setIsModalOpen(true);
   };
 
   const handleOpenEdit = (st: Student) => {
     setEditingId(st.id);
+    setFormError(null);
+    setIsSaving(false);
     setFormData({
       studentId: st.studentId,
       admissionNumber: st.admissionNumber,
@@ -107,7 +142,7 @@ export const StudentManagementView: React.FC = () => {
       busId: st.busId,
       stopId: st.stopId,
       parentName: st.parentName,
-      parentPhone: st.parentPhone,
+      parentPhone: st.parentPhone.startsWith('+91') ? st.parentPhone : `+91 ${st.parentPhone}`,
       address: st.address,
       term1Fee: st.term1Fee,
       term2Fee: st.term2Fee,
@@ -115,17 +150,71 @@ export const StudentManagementView: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim() || !formData.studentId.trim()) return;
-
-    if (editingId) {
-      updateStudent(editingId, formData);
-    } else {
-      const res = addStudent(formData);
-      if (!res.success) return;
+    setFormError(null);
+    setIsSaving(true);
+    
+    // Explicit Validation checks with Toast warnings
+    if (!formData.name.trim()) {
+      setFormError('Student Name is required!');
+      addToast('Validation Failed', 'error', 'Student Name is required!');
+      setIsSaving(false);
+      return;
     }
-    setIsModalOpen(false);
+    if (!formData.parentName.trim()) {
+      setFormError('Parent/Guardian Name is required!');
+      addToast('Validation Failed', 'error', 'Parent/Guardian Name is required!');
+      setIsSaving(false);
+      return;
+    }
+    const cleanPhone = formData.parentPhone.replace(/\D/g, '');
+    if (cleanPhone.length !== 10) {
+      setFormError('Parent WhatsApp number must be exactly 10 digits!');
+      addToast('Validation Failed', 'error', 'Parent WhatsApp number must be exactly 10 digits!');
+      setIsSaving(false);
+      return;
+    }
+    if (!formData.routeId) {
+      setFormError('Please select an active bus route.');
+      addToast('Validation Failed', 'error', 'Please select an active bus route.');
+      setIsSaving(false);
+      return;
+    }
+    if (!formData.stopId) {
+      setFormError('Please allocate a valid transit stop.');
+      addToast('Validation Failed', 'error', 'Please allocate a valid transit stop.');
+      setIsSaving(false);
+      return;
+    }
+
+    const payload = {
+      ...formData,
+      parentPhone: cleanPhone // AppContext will prepend +91
+    };
+
+    try {
+      if (editingId) {
+        const res = await updateStudent(editingId, payload);
+        if (res && (res as any).error) {
+          setFormError((res as any).error || 'Failed to update student profile');
+          setIsSaving(false);
+          return; // stay open
+        }
+      } else {
+        const res = await addStudent(payload);
+        if (res && !res.success) {
+          setFormError((res as any).error || 'Failed to register student record');
+          setIsSaving(false);
+          return; // stay open
+        }
+      }
+      setIsModalOpen(false);
+    } catch (err: any) {
+      setFormError(err.message || 'An error occurred during submission');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDeleteConfirm = () => {
@@ -362,7 +451,13 @@ export const StudentManagementView: React.FC = () => {
               </div>
             </div>
 
-            <form onSubmit={handleFormSubmit} className="space-y-4 text-xs font-medium">
+             <form onSubmit={handleFormSubmit} className="space-y-4 text-xs font-medium">
+              {formError && (
+                <div className="p-3.5 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl text-xs text-red-700 dark:text-red-300 flex items-center gap-2 font-bold animate-in shake duration-200">
+                  <AlertTriangle className="shrink-0 w-4 h-4 text-red-500 animate-bounce" />
+                  <span>{formError}</span>
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-slate-600 dark:text-slate-400 mb-1">Full Student Name *</label>
@@ -390,22 +485,28 @@ export const StudentManagementView: React.FC = () => {
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-slate-600 dark:text-slate-400 mb-1">Class</label>
-                  <input
-                    type="text"
+                  <label className="block text-slate-600 dark:text-slate-400 mb-1">Class *</label>
+                  <select
                     value={formData.class}
-                    onChange={e => setFormData({ ...formData, class: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
-                  />
+                    onChange={e => {
+                      const selectedClass = e.target.value;
+                      const nextId = generateClassWiseId(selectedClass);
+                      setFormData({ ...formData, class: selectedClass, studentId: nextId });
+                    }}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-bold"
+                  >
+                    {CLASSES.map(cls => <option key={cls} value={cls}>Class {cls}</option>)}
+                  </select>
                 </div>
                 <div>
-                  <label className="block text-slate-600 dark:text-slate-400 mb-1">Section</label>
-                  <input
-                    type="text"
+                  <label className="block text-slate-600 dark:text-slate-400 mb-1">Section *</label>
+                  <select
                     value={formData.section}
                     onChange={e => setFormData({ ...formData, section: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
-                  />
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-bold"
+                  >
+                    {SECTIONS.map(sec => <option key={sec} value={sec}>Section {sec}</option>)}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-slate-600 dark:text-slate-400 mb-1">Admission No</label>
@@ -418,49 +519,108 @@ export const StudentManagementView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-slate-600 dark:text-slate-400 mb-1">Assigned Route</label>
+                  <label className="block text-slate-600 dark:text-slate-400 mb-1">Assigned Route *</label>
                   <select
                     value={formData.routeId}
-                    onChange={e => setFormData({ ...formData, routeId: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                    onChange={e => {
+                      const selectedRouteId = e.target.value;
+                      const matchingBuses = buses.filter(b => b.routeId === selectedRouteId);
+                      const defaultBusId = matchingBuses[0]?.id || routes.find(r => r.id === selectedRouteId)?.assignedBusId || '';
+                      const matchingStops = stops.filter(s => s.routeId === selectedRouteId);
+                      const defaultStopId = matchingStops[0]?.id || '';
+                      const defaultFee = matchingStops[0]?.feePerStop || 600;
+                      setFormData({
+                        ...formData,
+                        routeId: selectedRouteId,
+                        busId: defaultBusId,
+                        stopId: defaultStopId,
+                        term1Fee: defaultFee,
+                        term2Fee: defaultFee
+                      });
+                    }}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-bold"
                   >
+                    <option value="">-- Choose Route --</option>
                     {routes.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                   </select>
                 </div>
+
                 <div>
                   <label className="block text-slate-600 dark:text-slate-400 mb-1">Assigned Bus Number</label>
                   <select
                     value={formData.busId}
                     onChange={e => setFormData({ ...formData, busId: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-bold"
                   >
-                    {buses.map(b => <option key={b.id} value={b.id}>{b.busNumber} ({b.driverName})</option>)}
+                    <option value="">-- No Bus --</option>
+                    {buses.filter(b => b.routeId === formData.routeId).map(b => (
+                      <option key={b.id} value={b.id}>{b.busNumber} ({b.driverName})</option>
+                    ))}
+                    {buses.filter(b => b.routeId === formData.routeId).length === 0 && (
+                      <option value="" disabled>No Buses on this Route</option>
+                    )}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-600 dark:text-slate-400 mb-1">Pickup Stop *</label>
+                  <select
+                    value={formData.stopId}
+                    onChange={e => {
+                      const stopId = e.target.value;
+                      const matchedStop = stops.find(s => s.id === stopId);
+                      const fee = matchedStop ? matchedStop.feePerStop : 600;
+                      setFormData({
+                        ...formData,
+                        stopId,
+                        term1Fee: fee,
+                        term2Fee: fee
+                      });
+                    }}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-bold"
+                    required
+                  >
+                    <option value="">-- Choose Stop --</option>
+                    {stops.filter(s => s.routeId === formData.routeId).map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.stopName} ({settings.currency}{s.feePerStop})
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-slate-600 dark:text-slate-400 mb-1">Parent Name</label>
+                  <label className="block text-slate-600 dark:text-slate-400 mb-1">Parent Name *</label>
                   <input
                     type="text"
+                    required
                     value={formData.parentName}
                     onChange={e => setFormData({ ...formData, parentName: e.target.value })}
-                    placeholder="Parent / Guardian"
+                    placeholder="Parent / Guardian Name"
                     className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-600 dark:text-slate-400 mb-1">Parent Phone (WhatsApp)</label>
-                  <input
-                    type="text"
-                    value={formData.parentPhone}
-                    onChange={e => setFormData({ ...formData, parentPhone: e.target.value })}
-                    placeholder="+1 (555) 000-0000"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-mono"
-                  />
+                  <label className="block text-slate-600 dark:text-slate-400 mb-1">Parent Phone (WhatsApp) *</label>
+                  <div className="flex rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 overflow-hidden items-center focus-within:ring-2 focus-within:ring-indigo-500">
+                    <span className="px-3 text-slate-400 dark:text-slate-500 font-mono text-sm select-none border-r border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">+91</span>
+                    <input
+                      type="text"
+                      required
+                      maxLength={10}
+                      value={formData.parentPhone.replace(/\D/g, '')}
+                      onChange={e => {
+                        const val = e.target.value.replace(/\D/g, '');
+                        setFormData({ ...formData, parentPhone: val });
+                      }}
+                      placeholder="Enter 10 digit number"
+                      className="w-full px-3 py-2 bg-transparent border-none text-slate-900 dark:text-white font-mono focus:outline-none text-sm"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -495,9 +655,17 @@ export const StudentManagementView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition-all"
+                  disabled={isSaving}
+                  className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer"
                 >
-                  Save Record
+                  {isSaving ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>Save Record</span>
+                  )}
                 </button>
               </div>
             </form>

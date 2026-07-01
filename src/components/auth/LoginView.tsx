@@ -17,7 +17,7 @@ export const LoginView: React.FC = () => {
       setIdentifier('admin@school.edu');
       setPassword('admin123');
     } else {
-      setIdentifier('STU1001');
+      setIdentifier('ST-10-1001');
       setPassword('password123');
     }
   };
@@ -119,7 +119,7 @@ export const LoginView: React.FC = () => {
                   type="text"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder={role === 'admin' ? 'admin@school.edu' : 'STU1001'}
+                  placeholder={role === 'admin' ? 'admin@school.edu' : 'ST-10-1001'}
                   className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
                 />
               </div>
@@ -208,7 +208,7 @@ export const LoginView: React.FC = () => {
                 className="p-1.5 bg-white dark:bg-slate-900 border rounded-lg text-left hover:border-indigo-400 transition-colors"
               >
                 <span className="font-sans font-bold text-emerald-600 block">Student Mode</span>
-                STU1001 / password123
+                ST-10-1001 / password123
               </button>
             </div>
           </div>
