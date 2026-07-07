@@ -10,9 +10,12 @@ const PaymentSchema = new Schema({
   term: { type: String, required: true }, // term1, term2, both
   paymentDate: { type: String, required: true },
   method: { type: String, required: true }, // Online Card, UPI, Net Banking, Cash, Cheque
-  status: { type: String, default: 'completed' }, // completed, failed, refunded
+  status: { type: String, default: 'completed' }, // completed, failed, refunded, pending
   remarks: { type: String, default: '' },
-  academicYear: { type: String, default: '2026 - 2027' }
+  academicYear: { type: String, default: '2026 - 2027' },
+  razorpayOrderId: { type: String, default: '' },
+  razorpayPaymentId: { type: String, default: '' },
+  razorpaySignature: { type: String, default: '' }
 });
 
 export const PaymentModel: any = mongoose.models.Payment || mongoose.model('Payment', PaymentSchema);

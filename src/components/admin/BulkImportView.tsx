@@ -223,8 +223,8 @@ ST-10-1001, Aarav Sharma, 10, A, Ramesh Sharma, 9988776655, 600, 600, West Subur
     validateAndPreviewText(rawText);
   };
 
-  const handleExecuteImport = () => {
-    const res = bulkImportStudents(parsedRows);
+  const handleExecuteImport = async () => {
+    const res = await bulkImportStudents(parsedRows);
     if (res && res.success) {
       setImportStats({ count: res.count, duplicates: res.duplicates });
       addToast('Import Completed', 'success', `Successfully loaded ${res.count} records. Redirecting to Student Directory...`);

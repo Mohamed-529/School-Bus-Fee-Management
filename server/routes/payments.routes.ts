@@ -3,6 +3,7 @@ import { verifyToken, AuthRequest } from '../middleware/auth';
 import { PaymentModel } from '../models/Payment';
 import { StudentModel } from '../models/Student';
 import { db } from '../db/database';
+import { paymentController } from '../controllers/payment.controller';
 
 const router = Router();
 
@@ -17,6 +18,30 @@ router.get('/', async (req, res: Response) => {
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to retrieve payment directory', details: err.message });
   }
+});
+
+/**
+ * POST /api/payments/create-order
+ * Create Razorpay payment order for online portal checkout
+ */
+router.post('/create-order', verifyToken, (req: AuthRequest, res: Response) => {
+  paymentController.createOrder(req, res);
+});
+
+/**
+ * POST /api/payments/verify
+ * Verify Razorpay cryptographic transaction signatures
+ */
+router.post('/verify', verifyToken, (req: AuthRequest, res: Response) => {
+  paymentController.verifySignature(req, res);
+});
+
+/**
+ * GET /api/payments/history/:studentId
+ * Retrieve paginated payment transaction history for a specific student
+ */
+router.get('/history/:studentId', verifyToken, (req: AuthRequest, res: Response) => {
+  paymentController.getPaymentHistory(req, res);
 });
 
 /**

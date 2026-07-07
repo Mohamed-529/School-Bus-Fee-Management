@@ -272,7 +272,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (role === 'admin') {
       await login('admin@school.edu', 'admin123', 'admin');
     } else {
-      const defaultStudent = students[0];
+      // Prioritize an unpaid student so the Razorpay checkout portal/gateway is open for demonstrations
+      const defaultStudent = students.find(s => s.pendingAmount > 0) || students[0];
       if (defaultStudent) {
         await login(defaultStudent.studentId, 'password123', 'student');
       } else {

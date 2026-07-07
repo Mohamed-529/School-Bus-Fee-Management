@@ -20,6 +20,16 @@ export const PaymentManagementView: React.FC = () => {
   const [payMethod, setPayMethod] = useState<'Cash' | 'Online Card' | 'UPI' | 'Cheque'>('Cash');
   const [remarks, setRemarks] = useState('');
 
+  // Dynamic pending & status helper based on real payments list
+  const getDynamicPendingInfo = (st: any) => {
+    const studentPayments = payments.filter(p => p.studentId === st.studentId && p.status === 'completed');
+    const totalPaid = studentPayments.reduce((sum, p) => sum + p.amount, 0);
+    const totalFees = (st.term1Fee || 0) + (st.term2Fee || 0);
+    const pendingAmount = Math.max(0, totalFees - totalPaid);
+    const isPaid = totalPaid >= totalFees && totalFees > 0;
+    return { pendingAmount, isPaid, totalPaid };
+  };
+
   // Helper functions to check payment status
   const isTerm1Paid = (studentId: string) => {
     return payments.some(p => p.studentId === studentId && (p.term === 'term1' || p.term === 'both'));
@@ -36,12 +46,14 @@ export const PaymentManagementView: React.FC = () => {
       const matchSearch = !q || st.name.toLowerCase().includes(q) || st.studentId.toLowerCase().includes(q);
       
       let matchFilter = true;
+      const { isPaid, pendingAmount } = getDynamicPendingInfo(st);
+
       if (filterStatus === 'paid') {
-        if (filterTerm === 'all') matchFilter = isTerm1Paid(st.studentId) && isTerm2Paid(st.studentId);
+        if (filterTerm === 'all') matchFilter = isPaid;
         else if (filterTerm === 'term1') matchFilter = isTerm1Paid(st.studentId);
         else if (filterTerm === 'term2') matchFilter = isTerm2Paid(st.studentId);
       } else if (filterStatus === 'pending') {
-        if (filterTerm === 'all') matchFilter = !isTerm1Paid(st.studentId) && !isTerm2Paid(st.studentId);
+        if (filterTerm === 'all') matchFilter = !isPaid && pendingAmount > 0;
         else if (filterTerm === 'term1') matchFilter = !isTerm1Paid(st.studentId);
         else if (filterTerm === 'term2') matchFilter = !isTerm2Paid(st.studentId);
       }
@@ -149,7 +161,7 @@ export const PaymentManagementView: React.FC = () => {
               </thead>
               <tbody className="divide-y text-xs">
                 {filteredStudents.map((st) => {
-                  const isPaid = st.status === 'paid';
+                  const { pendingAmount, isPaid } = getDynamicPendingInfo(st);
                   return (
                     <tr key={st.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
                       <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">
@@ -160,7 +172,7 @@ export const PaymentManagementView: React.FC = () => {
                       <td className="px-6 py-4 font-mono">{settings.currency}{st.term1Fee}</td>
                       <td className="px-6 py-4 font-mono">{settings.currency}{st.term2Fee}</td>
                       <td className="px-6 py-4 font-mono font-bold text-rose-600 dark:text-rose-400 text-sm">
-                        {settings.currency}{st.pendingAmount}
+                        {settings.currency}{pendingAmount}
                       </td>
                       <td className="px-6 py-4">
                         {isPaid ? (
@@ -260,7 +272,7 @@ export const PaymentManagementView: React.FC = () => {
                   onChange={e => setPayTerm(e.target.value as any)}
                   className="w-full p-2.5 rounded-xl border bg-slate-50 dark:bg-slate-800"
                 >
-                  <option value="both">Both Terms (Full Year Due: {settings.currency}{payModalStudent.pendingAmount})</option>
+                  <option value="both">Both Terms (Full Year Due: {settings.currency}{getDynamicPendingInfo(payModalStudent).pendingAmount})</option>
                   <option value="term1">Term 1 Only ({settings.currency}{payModalStudent.term1Fee})</option>
                   <option value="term2">Term 2 Only ({settings.currency}{payModalStudent.term2Fee})</option>
                 </select>

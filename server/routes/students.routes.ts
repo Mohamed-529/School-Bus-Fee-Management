@@ -1,18 +1,65 @@
 import { Router, Response } from 'express';
 import { verifyToken, AuthRequest } from '../middleware/auth';
 import { StudentModel } from '../models/Student';
+import { PaymentModel } from '../models/Payment';
 import { db } from '../db/database';
 
 const router = Router();
 
 /**
  * GET /api/students
- * Retrieve all registered and pending students from MongoDB
+ * Retrieve all registered and pending students from MongoDB with auto-recalculated dues
  */
 router.get('/', async (req, res: Response) => {
   try {
     const students = await StudentModel.find().sort({ name: 1 });
-    res.json({ students });
+    const allPayments = await PaymentModel.find({ status: 'completed' });
+    
+    // Create a fast-lookup map for completed payments by studentId
+    const paymentsMap = new Map<string, any[]>();
+    allPayments.forEach(p => {
+      const list = paymentsMap.get(p.studentId) || [];
+      list.push(p);
+      paymentsMap.set(p.studentId, list);
+    });
+
+    const updatedStudents = [];
+    for (const student of students) {
+      const studentPayments = paymentsMap.get(student.studentId) || [];
+      const totalPaid = studentPayments.reduce((sum, record) => sum + record.amount, 0);
+      const totalFees = (student.term1Fee || 0) + (student.term2Fee || 0);
+      
+      const correctPending = Math.max(0, totalFees - totalPaid);
+      let correctStatus = student.status;
+      if (totalPaid >= totalFees && totalFees > 0) {
+        correctStatus = 'paid';
+      } else if (totalPaid > 0) {
+        correctStatus = 'partial';
+      } else {
+        correctStatus = 'pending';
+      }
+
+      let needsSave = false;
+      if (student.paidAmount !== totalPaid) {
+        student.paidAmount = totalPaid;
+        needsSave = true;
+      }
+      if (student.pendingAmount !== correctPending) {
+        student.pendingAmount = correctPending;
+        needsSave = true;
+      }
+      if (student.status !== correctStatus) {
+        student.status = correctStatus;
+        needsSave = true;
+      }
+
+      if (needsSave) {
+        await student.save();
+      }
+      updatedStudents.push(student);
+    }
+
+    res.json({ students: updatedStudents });
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to fetch students from database', details: err.message });
   }

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import axios from 'axios';
 import { useApp } from '../../context/AppContext';
 import { ReceiptModal } from '../common/ReceiptModal';
 import { EmptyState } from '../common/EmptyState';
@@ -6,6 +7,16 @@ import {
   CreditCard, ShieldCheck, Download, DollarSign, Clock, 
   CheckCircle2, AlertTriangle, Lock, Sparkles 
 } from 'lucide-react';
+
+const loadRazorpayScript = () => {
+  return new Promise((resolve) => {
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+};
 
 export const StudentPaymentView: React.FC = () => {
   const { currentUser, payments, recordPayment, settings } = useApp();
@@ -31,7 +42,7 @@ export const StudentPaymentView: React.FC = () => {
     return (isTerm1Paid ? 0 : currentUser.term1Fee) + (isTerm2Paid ? 0 : currentUser.term2Fee);
   };
 
-  const handleExecuteCheckout = (e: React.FormEvent) => {
+  const handleExecuteCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
     const amt = calculatePayAmount();
     if (amt <= 0) {
@@ -40,9 +51,93 @@ export const StudentPaymentView: React.FC = () => {
     }
 
     setIsProcessing(true);
+
+    if (settings.paymentGatewaysEnabled) {
+      try {
+        const sdkLoaded = await loadRazorpayScript();
+        if (!sdkLoaded) {
+          alert('Failed to load Razorpay payment portal. Falling back to offline simulator.');
+          runSimulation(amt);
+          return;
+        }
+
+        const token = localStorage.getItem('sbfms_token');
+        const response = await axios.post('/api/payments/create-order', {
+          studentId: currentUser.studentId,
+          amount: amt,
+          term: selectedTerm
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (!response.data || !response.data.success) {
+          throw new Error(response.data?.message || 'Order creation failed');
+        }
+
+        const { orderId, amount: orderAmt, currency, keyId } = response.data.data;
+
+        const options = {
+          key: keyId,
+          amount: orderAmt,
+          currency: currency,
+          name: settings.schoolName || 'School Bus Fee',
+          description: `Transport Fee - ${selectedTerm.toUpperCase()}`,
+          order_id: orderId,
+          handler: async (paymentRes: any) => {
+            setIsProcessing(true);
+            try {
+              const verifyRes = await axios.post('/api/payments/verify', {
+                razorpayOrderId: paymentRes.razorpay_order_id,
+                razorpayPaymentId: paymentRes.razorpay_payment_id,
+                razorpaySignature: paymentRes.razorpay_signature
+              }, {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+
+              if (verifyRes.data && verifyRes.data.success) {
+                alert('Success! Your payment has been securely completed and verified.');
+                window.location.reload();
+              } else {
+                alert('Verification Failed: ' + (verifyRes.data?.message || 'Verification Error'));
+              }
+            } catch (err: any) {
+              alert('Error verifying payment signature: ' + (err.response?.data?.error || err.message));
+            } finally {
+              setIsProcessing(false);
+            }
+          },
+          prefill: {
+            name: currentUser.name,
+            email: currentUser.email,
+            contact: currentUser.parentPhone || ''
+          },
+          theme: {
+            color: '#4f46e5'
+          },
+          modal: {
+            ondismiss: () => {
+              setIsProcessing(false);
+            }
+          }
+        };
+
+        const rzp = new (window as any).Razorpay(options);
+        rzp.open();
+
+      } catch (err: any) {
+        const errMsg = err.response?.data?.message || err.message || 'Payment failed';
+        alert('Payment checkout error: ' + errMsg);
+        setIsProcessing(false);
+      }
+    } else {
+      runSimulation(amt);
+    }
+  };
+
+  const runSimulation = (amountToPay: number) => {
     setTimeout(() => {
       const mappedMethod = selectedMethod === 'Card' ? 'Online Card' : selectedMethod === 'NetBanking' ? 'Net Banking' : 'UPI';
-      recordPayment(currentUser.studentId, amt, selectedTerm, mappedMethod);
+      recordPayment(currentUser.studentId, amountToPay, selectedTerm, mappedMethod);
       setIsProcessing(false);
     }, 1500);
   };
