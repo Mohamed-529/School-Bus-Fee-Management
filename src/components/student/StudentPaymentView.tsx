@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { useApp } from '../../context/AppContext';
+import { useApp, api } from '../../context/AppContext';
 import { ReceiptModal } from '../common/ReceiptModal';
 import { EmptyState } from '../common/EmptyState';
 import { 
@@ -61,13 +61,10 @@ export const StudentPaymentView: React.FC = () => {
           return;
         }
 
-        const token = localStorage.getItem('sbfms_token');
-        const response = await axios.post('/api/payments/create-order', {
+        const response = await api.post('/api/payments/create-order', {
           studentId: currentUser.studentId,
           amount: amt,
           term: selectedTerm
-        }, {
-          headers: { Authorization: `Bearer ${token}` }
         });
 
         if (!response.data || !response.data.success) {
@@ -86,12 +83,10 @@ export const StudentPaymentView: React.FC = () => {
           handler: async (paymentRes: any) => {
             setIsProcessing(true);
             try {
-              const verifyRes = await axios.post('/api/payments/verify', {
+              const verifyRes = await api.post('/api/payments/verify', {
                 razorpayOrderId: paymentRes.razorpay_order_id,
                 razorpayPaymentId: paymentRes.razorpay_payment_id,
                 razorpaySignature: paymentRes.razorpay_signature
-              }, {
-                headers: { Authorization: `Bearer ${token}` }
               });
 
               if (verifyRes.data && verifyRes.data.success) {

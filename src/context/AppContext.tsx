@@ -80,8 +80,8 @@ const STORAGE_KEYS = {
 };
 
 // Create a custom interceptable Axios client that handles authorization
-const api = axios.create({
-  baseURL: ''
+export const api = axios.create({
+  baseURL: 'https://school-bus-fee-management.onrender.com'
 });
 
 api.interceptors.request.use((config) => {
